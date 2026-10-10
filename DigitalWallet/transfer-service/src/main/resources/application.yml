@@ -1,0 +1,24 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: transfer-service
+  datasource:
+    url: jdbc:postgresql://localhost:5432/transferdb
+    username: admin
+    password: secret
+  r2dbc:
+    url: r2dbc:postgresql://localhost:5432/transferdb
+    username: admin
+    password: secret
+    pool:
+      initial-size: 5
+      max-size: 20
+
+  flyway:
+    enabled: true
+    url: jdbc:postgresql://localhost:5432/transferdb
+    user: admin
+    password: secret
+    locations: classpath:db/migration

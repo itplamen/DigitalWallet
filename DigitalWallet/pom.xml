@@ -30,7 +30,6 @@
 
     <dependencyManagement>
         <dependencies>
-            <!-- Testcontainers BOM -->
             <dependency>
                 <groupId>org.testcontainers</groupId>
                 <artifactId>testcontainers-bom</artifactId>
