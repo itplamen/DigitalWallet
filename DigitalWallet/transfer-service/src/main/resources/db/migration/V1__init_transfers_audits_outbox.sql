@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     transfer_id BIGINT NOT NULL,
     from_status VARCHAR(20),
     to_status VARCHAR(20) NOT NULL,
-    reason VARCHAR(255,
+    reason VARCHAR(255),
     created_at TIMESTAMP WITH TIME ZONE NOT NULL,
     CONSTRAINT fk_audit_logs_transfer FOREIGN KEY (transfer_id) REFERENCES transfers(id) ON DELETE CASCADE
 );
