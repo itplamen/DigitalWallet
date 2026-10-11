@@ -1,0 +1,2 @@
+CREATE DATABASE transferdb;
+CREATE DATABASE walletdb;
