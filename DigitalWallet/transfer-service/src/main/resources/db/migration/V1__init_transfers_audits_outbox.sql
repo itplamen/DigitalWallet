@@ -35,3 +35,4 @@ CREATE TABLE IF NOT EXISTS outbox_messages (
 
 CREATE INDEX IF NOT EXISTS idx_audit_logs_transfer_id ON audit_logs (transfer_id);
 CREATE INDEX IF NOT EXISTS idx_transfers_idempotency ON transfers(idempotency_key);
+CREATE INDEX IF NOT EXISTS idx_outbox_messages_unprocessed ON outbox_messages (processed) WHERE processed = FALSE;
