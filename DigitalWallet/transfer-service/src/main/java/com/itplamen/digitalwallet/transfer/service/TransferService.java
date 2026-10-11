@@ -4,11 +4,11 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itplamen.digitalwallet.transfer.dto.TransferRequest;
 import com.itplamen.digitalwallet.transfer.entity.AuditLog;
-import com.itplamen.digitalwallet.transfer.entity.OutboxEvent;
+import com.itplamen.digitalwallet.transfer.entity.OutboxMessage;
 import com.itplamen.digitalwallet.transfer.entity.Transfer;
 import com.itplamen.digitalwallet.transfer.entity.TransferStatus;
 import com.itplamen.digitalwallet.transfer.repository.AuditLogRepository;
-import com.itplamen.digitalwallet.transfer.repository.OutboxEventRepository;
+import com.itplamen.digitalwallet.transfer.repository.OutboxMessageRepository;
 import com.itplamen.digitalwallet.transfer.repository.TransferRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,7 +26,7 @@ public class TransferService {
     private final ObjectMapper objectMapper;
     private final TransferRepository transferRepository;
     private final AuditLogRepository auditLogRepository;
-    private final OutboxEventRepository outboxEventRepository;
+    private final OutboxMessageRepository outboxEventRepository;
     private final TransactionalOperator transactionalOperator;
 
     public Mono<Transfer> initiateTransfer(TransferRequest request) {
@@ -41,7 +41,7 @@ public class TransferService {
         return transferRepository.save(newTransfer)
                 .flatMap(savedTransfer -> {
                     AuditLog auditLog = buildAuditLog(savedTransfer);
-                    OutboxEvent outboxEvent = buildOutboxEvent(savedTransfer);
+                    OutboxMessage outboxEvent = buildOutboxEvent(savedTransfer);
 
                     return auditLogRepository.save(auditLog)
                             .then(outboxEventRepository.save(outboxEvent))
@@ -75,11 +75,11 @@ public class TransferService {
                 .build();
     }
 
-    private OutboxEvent buildOutboxEvent(Transfer transfer) {
+    private OutboxMessage buildOutboxEvent(Transfer transfer) {
         try {
             String payload = objectMapper.writeValueAsString(transfer);
 
-            return OutboxEvent.builder()
+            return OutboxMessage.builder()
                     .aggregateType("Transfer")
                     .aggregateId(String.valueOf(transfer.getId()))
                     .eventType("TRANSFER_INITIATED")

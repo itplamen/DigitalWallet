@@ -1,6 +1,6 @@
 package com.itplamen.digitalwallet.transfer.repository;
 
-import com.itplamen.digitalwallet.transfer.entity.OutboxEvent;
+import com.itplamen.digitalwallet.transfer.entity.OutboxMessage;
 import org.springframework.data.r2dbc.repository.Modifying;
 import org.springframework.data.r2dbc.repository.Query;
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;
@@ -11,12 +11,12 @@ import reactor.core.publisher.Mono;
 import java.util.Collection;
 
 @Repository
-public interface OutboxEventRepository extends ReactiveCrudRepository<OutboxEvent, Long> {
+public interface OutboxMessageRepository extends ReactiveCrudRepository<OutboxMessage, Long> {
 
-    @Query("SELECT * FROM outbox_events WHERE processed = FALSE ORDER BY created_at ASC LIMIT :limit")
-    Flux<OutboxEvent> findUnprocessedEvents(int limit);
+    @Query("SELECT * FROM outbox_messages WHERE processed = FALSE ORDER BY created_at ASC LIMIT :limit")
+    Flux<OutboxMessage> findUnprocessedEvents(int limit);
 
     @Modifying
-    @Query("UPDATE outbox_events SET processed = true, version = version + 1 WHERE id IN (:ids)")
+    @Query("UPDATE outbox_messages SET processed = true, version = version + 1 WHERE id IN (:ids)")
     Mono<Integer> markAsProcessed(Collection<Long> ids);
 }

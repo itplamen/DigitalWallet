@@ -1,8 +1,8 @@
 package com.itplamen.digitalwallet.transfer.worker;
 
-import com.itplamen.digitalwallet.transfer.entity.OutboxEvent;
+import com.itplamen.digitalwallet.transfer.entity.OutboxMessage;
 import com.itplamen.digitalwallet.transfer.producer.KafkaEventProducer;
-import com.itplamen.digitalwallet.transfer.repository.OutboxEventRepository;
+import com.itplamen.digitalwallet.transfer.repository.OutboxMessageRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -14,7 +14,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class OutboxPoller {
 
-    private final OutboxEventRepository outboxEventRepository;
+    private final OutboxMessageRepository outboxEventRepository;
     private final KafkaEventProducer kafkaEventProducer;
 
     @Scheduled(fixedDelay = 2000)
@@ -27,7 +27,7 @@ public class OutboxPoller {
                 .collectList()
                 .filter(events -> !events.isEmpty())
                 .flatMap(events -> {
-                    List<Long> eventIds = events.stream().map(OutboxEvent::getId).toList();
+                    List<Long> eventIds = events.stream().map(OutboxMessage::getId).toList();
 
                     return outboxEventRepository.markAsProcessed(eventIds)
                             .doOnSuccess(updatedCount ->

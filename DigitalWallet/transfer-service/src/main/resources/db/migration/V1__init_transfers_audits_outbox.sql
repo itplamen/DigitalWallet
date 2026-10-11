@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     CONSTRAINT fk_audit_logs_transfer FOREIGN KEY (transfer_id) REFERENCES transfers(id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS outbox_events (
+CREATE TABLE IF NOT EXISTS outbox_messages (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     aggregate_type VARCHAR(50) NOT NULL,
     aggregate_id VARCHAR(50) NOT NULL,

@@ -15,8 +15,8 @@ import java.time.Instant;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Table("outbox_events")
-public class OutboxEvent {
+@Table("outbox_messages")
+public class OutboxMessage {
 
     @Id
     private Long id;
