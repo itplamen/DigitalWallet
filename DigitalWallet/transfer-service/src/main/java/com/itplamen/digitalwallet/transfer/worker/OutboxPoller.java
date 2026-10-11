@@ -19,7 +19,7 @@ public class OutboxPoller {
 
     @Scheduled(fixedDelay = 2000)
     public void pollAndPublishEvents() {
-        outboxEventRepository.findUnprocessedEvents(50)
+        outboxEventRepository.findUnprocessed(50)
                 .flatMap(event ->
                         kafkaEventProducer.publish("transfer-events", event.getAggregateId(), event.getPayload())
                                 .thenReturn(event)

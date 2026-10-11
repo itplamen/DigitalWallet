@@ -14,7 +14,7 @@ import java.util.Collection;
 public interface OutboxMessageRepository extends ReactiveCrudRepository<OutboxMessage, Long> {
 
     @Query("SELECT * FROM outbox_messages WHERE processed = FALSE ORDER BY created_at ASC LIMIT :limit")
-    Flux<OutboxMessage> findUnprocessedEvents(int limit);
+    Flux<OutboxMessage> findUnprocessed(int limit);
 
     @Modifying
     @Query("UPDATE outbox_messages SET processed = true, version = version + 1 WHERE id IN (:ids)")
