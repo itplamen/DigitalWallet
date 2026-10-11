@@ -17,6 +17,7 @@ import java.time.Instant;
 @Table("audit_logs")
 public class AuditLog {
     @Id
+    @Column("id")
     private Long id;
 
     @Column("transfer_id")
