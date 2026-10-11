@@ -16,7 +16,7 @@ import java.time.Instant;
 @AllArgsConstructor
 @Table("audit_logs")
 public class AuditLog {
-    
+
     @Id
     @Column("id")
     private Long id;
