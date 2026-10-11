@@ -19,6 +19,7 @@ import java.time.Instant;
 public class OutboxMessage {
 
     @Id
+    @Column("id")
     private Long id;
 
     @Column("aggregate_type")

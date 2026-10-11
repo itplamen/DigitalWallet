@@ -18,7 +18,9 @@ import java.time.Instant;
 @AllArgsConstructor
 @Table("transfers")
 public class Transfer {
+
     @Id
+    @Column("id")
     private Long id;
 
     @Column("source_wallet_id")
