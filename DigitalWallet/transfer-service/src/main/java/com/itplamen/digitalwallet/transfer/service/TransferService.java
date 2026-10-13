@@ -1,7 +1,5 @@
 package com.itplamen.digitalwallet.transfer.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itplamen.digitalwallet.transfer.dto.TransferRequest;
 import com.itplamen.digitalwallet.transfer.entity.AuditLog;
 import com.itplamen.digitalwallet.transfer.entity.OutboxMessage;
@@ -15,6 +13,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Mono;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
 
@@ -87,7 +87,7 @@ public class TransferService {
                     .processed(false)
                     .createdAt(Instant.now())
                     .build();
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new RuntimeException("Failed to serialize transfer to outbox payload", e);
         }
     }

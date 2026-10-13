@@ -2,8 +2,6 @@ package com.itplamen.digitalwallet.transfer.consumer;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itplamen.digitalwallet.transfer.entity.TransferStatus;
 import com.itplamen.digitalwallet.transfer.repository.TransferRepository;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +11,8 @@ import org.apache.kafka.common.header.Header;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
@@ -51,7 +51,7 @@ public class TransferEventConsumer {
 
             return Mono.fromCallable(() -> objectMapper.readValue(record.value(), WalletEventPayload.class))
                     .onErrorMap(
-                            JsonProcessingException.class,
+                            JacksonException.class,
                             error -> new IllegalArgumentException("Invalid wallet event JSON", error)
                     )
                     .flatMap(payload -> {
