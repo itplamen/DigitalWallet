@@ -24,7 +24,7 @@ public class Wallet {
     private Long id;
 
     @Column("user_id")
-    private String userId;
+    private Long userId;
 
     @Column("balance")
     private BigDecimal balance;

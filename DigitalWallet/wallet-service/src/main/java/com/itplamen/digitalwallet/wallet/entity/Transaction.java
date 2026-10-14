@@ -34,7 +34,7 @@ public class Transaction {
     @Column("type")
     private String type;
 
-    @Column("success")
+    @Column("status")
     private String status;
 
     @Column("created_at")
