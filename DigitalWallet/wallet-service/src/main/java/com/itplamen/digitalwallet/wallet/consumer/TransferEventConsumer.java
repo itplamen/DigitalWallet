@@ -32,7 +32,7 @@ public class TransferEventConsumer {
                                     JacksonException.class,
                                     error -> new IllegalArgumentException("Invalid transfer event JSON", error)
                             )
-                            .flatMap(walletService::processTransferDebit);
+                            .flatMap(walletService::processTransfer);
                 }).doOnSuccess(v -> log.info("Successfully processed transfer debit event from partition [{}]", record.partition()))
                 .doOnError(error -> log.error("Failed to process transfer event from topic [{}], partition [{}]",
                         record.topic(), record.partition(), error));
