@@ -19,7 +19,11 @@ public class OutboxPoller {
     public void pollAndPublishEvents() {
         outboxMessageRepository.findUnprocessed(50)
                 .flatMap(event ->
-                        walletEventProducer.publish("wallet-events", event.getAggregateId(), event.getPayload())
+                        walletEventProducer.publish(
+                                        "wallet-events",
+                                        event.getAggregateId(),
+                                        event.getPayload(),
+                                        event.getEventType())
                                 .thenReturn(event)
                 )
                 .collectList()

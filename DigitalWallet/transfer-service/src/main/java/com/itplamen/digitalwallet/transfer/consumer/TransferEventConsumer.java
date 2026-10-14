@@ -1,7 +1,6 @@
 package com.itplamen.digitalwallet.transfer.consumer;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.itplamen.digitalwallet.transfer.entity.TransferStatus;
 import com.itplamen.digitalwallet.transfer.repository.TransferRepository;
 import lombok.RequiredArgsConstructor;
@@ -101,6 +100,8 @@ public class TransferEventConsumer {
         return switch (eventType) {
             case "WALLET_DEBITED" -> Optional.of(TransferStatus.SOURCE_DEBITED);
             case "WALLET_DEBIT_FAILED" -> Optional.of(TransferStatus.FAILED);
+            case "WALLET_TRANSFER_SETTLED" -> Optional.of(TransferStatus.COMPLETED);
+            case "WALLET_TRANSFER_FAILED" -> Optional.of(TransferStatus.FAILED);
             case "TRANSFER_COMPLETED" -> Optional.of(TransferStatus.COMPLETED);
             case "TRANSFER_REVERSED" -> Optional.of(TransferStatus.REVERSED);
             default -> Optional.empty();
@@ -118,6 +119,7 @@ public class TransferEventConsumer {
         }
 
         return target == TransferStatus.SOURCE_DEBITED
+                || target == TransferStatus.COMPLETED
                 || target == TransferStatus.FAILED;
     }
 
@@ -128,5 +130,5 @@ public class TransferEventConsumer {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record WalletEventPayload(@JsonProperty("id") Long transferId) { }
+    public record WalletEventPayload(Long transferId) { }
 }
