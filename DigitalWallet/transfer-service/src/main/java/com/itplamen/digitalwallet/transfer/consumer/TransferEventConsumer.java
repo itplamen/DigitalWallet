@@ -2,7 +2,7 @@ package com.itplamen.digitalwallet.transfer.consumer;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.itplamen.digitalwallet.transfer.entity.TransferStatus;
-import com.itplamen.digitalwallet.transfer.repository.TransferRepository;
+import com.itplamen.digitalwallet.transfer.service.TransferService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -22,7 +22,7 @@ import java.util.Optional;
 public class TransferEventConsumer {
 
     private final ObjectMapper objectMapper;
-    private final TransferRepository transferRepository;
+    private final TransferService transferService;
 
     @KafkaListener(topics = "wallet-events", groupId = "transfer-service-group")
     public Mono<Void> consumeWalletEvent(ConsumerRecord<String, String> record) {
@@ -58,42 +58,14 @@ public class TransferEventConsumer {
                             return Mono.error(new IllegalArgumentException("Missing transfer ID in wallet event"));
                         }
 
-                        return updateTransferStatus(payload.transferId(), targetStatus.get());
+                        return transferService.transitionStatus(
+                                payload.transferId(),
+                                targetStatus.get(),
+                                payload.reason() == null ? eventType : payload.reason())
+                                .then();
                     });
         }).doOnError(error ->
                 log.error("Failed to process wallet event from topic [{}], partition [{}]", record.topic(), record.partition(), error));
-    }
-
-    private Mono<Void> updateTransferStatus(Long transferId, TransferStatus targetStatus) {
-        return transferRepository.findById(transferId)
-                .switchIfEmpty(Mono.error(new IllegalStateException("Transfer not found: " + transferId)))
-                .flatMap(transfer -> {
-                    TransferStatus current = transfer.getStatus();
-
-                    if (current == targetStatus) {
-                        log.info("Transfer {} already has status {}", transferId, current);
-                        return Mono.empty();
-                    }
-
-                    if (!isAllowedTransition(current, targetStatus)) {
-                        return Mono.error(
-                                new IllegalStateException(
-                                        "Invalid transfer status transition for "
-                                                + transferId + ": "
-                                                + current + " -> " + targetStatus
-                                )
-                        );
-                    }
-
-                    transfer.setStatus(targetStatus);
-
-                    return transferRepository.save(transfer)
-                            .doOnNext(saved -> log.info(
-                                    "Updated transfer {} to status {}",
-                                    saved.getId(), saved.getStatus()
-                            ))
-                            .then();
-                });
     }
 
     private Optional<TransferStatus> mapEventToStatus(String eventType) {
@@ -108,27 +80,6 @@ public class TransferEventConsumer {
         };
     }
 
-    private boolean isAllowedTransition(TransferStatus current, TransferStatus target) {
-        if (current == null || isTerminal(current)) {
-            return false;
-        }
-
-        if (current == TransferStatus.SOURCE_DEBITED) {
-            return target == TransferStatus.COMPLETED
-                    || target == TransferStatus.REVERSED;
-        }
-
-        return target == TransferStatus.SOURCE_DEBITED
-                || target == TransferStatus.COMPLETED
-                || target == TransferStatus.FAILED;
-    }
-
-    private boolean isTerminal(TransferStatus status) {
-        return status == TransferStatus.COMPLETED
-                || status == TransferStatus.FAILED
-                || status == TransferStatus.REVERSED;
-    }
-
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record WalletEventPayload(Long transferId) { }
+    public record WalletEventPayload(Long transferId, String reason) { }
 }
