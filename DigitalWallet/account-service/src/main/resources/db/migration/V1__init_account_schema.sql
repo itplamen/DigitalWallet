@@ -1,10 +1,10 @@
 CREATE TABLE accounts (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     account_number VARCHAR(50) UNIQUE NOT NULL,
-    balance NUMERIC(19, 8) NOT NULL,
     status VARCHAR(50) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    version BIGINT NOT NULL DEFAULT 0
+    version BIGINT NOT NULL DEFAULT 0,
+    CONSTRAINT chk_accounts_status CHECK (status IN ('ACTIVE', 'SUSPENDED', 'CLOSED'));
 );
 
 CREATE TABLE IF NOT EXISTS outbox_messages (

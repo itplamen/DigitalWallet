@@ -9,7 +9,6 @@ import org.springframework.data.annotation.Version;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
-import java.math.BigDecimal;
 import java.time.Instant;
 
 @Data
@@ -26,11 +25,8 @@ public class Account {
     @Column("account_number")
     private String accountNumber;
 
-    @Column("balance")
-    private BigDecimal balance;
-
     @Column("status")
-    private String status;
+    private AccountStatus status;
 
     @Column("created_at")
     private Instant createdAt;
