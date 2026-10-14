@@ -1,9 +1,11 @@
 package com.itplamen.digitalwallet.account.controller;
 
 import com.itplamen.digitalwallet.account.dto.AccountEligibilityResponse;
+import com.itplamen.digitalwallet.account.dto.AccountEligibilityReason;
+import com.itplamen.digitalwallet.account.dto.AccountResponse;
 import com.itplamen.digitalwallet.account.dto.CreateAccountRequest;
 import com.itplamen.digitalwallet.account.dto.UpdateAccountStatusRequest;
-import com.itplamen.digitalwallet.account.entity.Account;
+import com.itplamen.digitalwallet.account.mapper.AccountMapper;
 import com.itplamen.digitalwallet.account.service.AccountService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -26,32 +28,35 @@ import java.net.URI;
 public class AccountController {
 
     private final AccountService accountService;
+    private final AccountMapper accountMapper;
 
     @PostMapping
-    public Mono<ResponseEntity<Account>> create(@Valid @RequestBody CreateAccountRequest request) {
+    public Mono<ResponseEntity<AccountResponse>> create(@Valid @RequestBody CreateAccountRequest request) {
         return accountService.create(request.accountNumber())
                 .map(account -> ResponseEntity.created(URI.create("/api/v1/accounts/" + account.getId()))
-                        .body(account));
+                        .body(accountMapper.toResponse(account)));
     }
 
     @GetMapping("/{accountId}")
-    public Mono<Account> get(@PathVariable Long accountId) {
-        return accountService.get(accountId);
+    public Mono<AccountResponse> get(@PathVariable Long accountId) {
+        return accountService.get(accountId).map(accountMapper::toResponse);
     }
 
     @PutMapping("/{accountId}/status")
-    public Mono<Account> updateStatus(
+    public Mono<AccountResponse> updateStatus(
             @PathVariable Long accountId,
-            @Valid @RequestBody UpdateAccountStatusRequest request
-    ) {
-        return accountService.updateStatus(accountId, request.status());
+            @Valid @RequestBody UpdateAccountStatusRequest request) {
+        return accountService.updateStatus(accountId, request.status()).map(accountMapper::toResponse);
     }
 
     @GetMapping("/{accountId}/eligibility")
     public Mono<ResponseEntity<AccountEligibilityResponse>> checkEligibility(@PathVariable Long accountId) {
         return accountService.checkEligibility(accountId)
                 .map(response -> ResponseEntity.status(
-                                "NOT_FOUND".equals(response.reason()) ? HttpStatus.NOT_FOUND : HttpStatus.OK)
+                                AccountEligibilityReason.NOT_FOUND.name().equals(response.reason())
+                                        ? HttpStatus.NOT_FOUND
+                                        : HttpStatus.OK)
                         .body(response));
     }
+
 }

@@ -1,6 +1,7 @@
 package com.itplamen.digitalwallet.account.service;
 
 import com.itplamen.digitalwallet.account.dto.AccountEligibilityResponse;
+import com.itplamen.digitalwallet.account.dto.AccountEligibilityReason;
 import com.itplamen.digitalwallet.account.entity.Account;
 import com.itplamen.digitalwallet.account.entity.AccountStatus;
 import com.itplamen.digitalwallet.account.exception.AccountAlreadyExistsException;
@@ -37,12 +38,18 @@ public class AccountService {
                 .switchIfEmpty(Mono.error(new AccountNotFoundException(accountId)));
     }
 
+    public  Mono<Account> get(String accountNumber) {
+        return  accountRepository.findByAccountNumber(accountNumber)
+                .switchIfEmpty(Mono.error(new AccountNotFoundException(accountNumber)));
+    }
+
     public Mono<Account> updateStatus(Long accountId, AccountStatus requestedStatus) {
         return get(accountId)
                 .flatMap(account -> {
                     if (account.getStatus() == requestedStatus) {
                         return Mono.just(account);
                     }
+
                     if (!isAllowedTransition(account.getStatus(), requestedStatus)) {
                         return Mono.error(new InvalidAccountStatusTransitionException(
                                 accountId, account.getStatus(), requestedStatus));
@@ -59,10 +66,11 @@ public class AccountService {
                 .map(account -> account.getStatus() == AccountStatus.ACTIVE
                         ? new AccountEligibilityResponse(accountId, true, null)
                         : new AccountEligibilityResponse(accountId, false, account.getStatus().name()))
-                .defaultIfEmpty(new AccountEligibilityResponse(accountId, false, "NOT_FOUND"));
+                .defaultIfEmpty(new AccountEligibilityResponse(
+                        accountId, false, AccountEligibilityReason.NOT_FOUND.name()));
     }
 
-    private boolean isAllowedTransition(AccountStatus current, AccountStatus requested) {
+    private Boolean isAllowedTransition(AccountStatus current, AccountStatus requested) {
         return switch (current) {
             case ACTIVE -> requested == AccountStatus.SUSPENDED || requested == AccountStatus.CLOSED;
             case SUSPENDED -> requested == AccountStatus.ACTIVE || requested == AccountStatus.CLOSED;
