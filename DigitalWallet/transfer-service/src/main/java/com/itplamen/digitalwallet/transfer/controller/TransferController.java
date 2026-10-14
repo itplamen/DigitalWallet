@@ -20,6 +20,13 @@ public class TransferController {
     @PostMapping
     public Mono<ResponseEntity<Transfer>> initiateTransfer(@Valid @RequestBody TransferRequest request) {
         return transferService.initiateTransfer(request)
-                .map(transfer -> ResponseEntity.status(HttpStatus.CREATED).body(transfer));
+                .map(result -> ResponseEntity
+                        .status(result.created() ? HttpStatus.CREATED : HttpStatus.OK)
+                        .body(result.transfer()));
+    }
+
+    @GetMapping("/{transferId}")
+    public Mono<Transfer> getTransfer(@PathVariable Long transferId) {
+        return transferService.getTransfer(transferId);
     }
 }
