@@ -145,7 +145,6 @@ public class WalletService {
                     .payload(jsonPayload)
                     .createdAt(createdAt)
                     .processed(false)
-                    .version(0L)
                     .build();
 
             return outboxRepository.save(outbox).then();

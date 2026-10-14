@@ -14,8 +14,7 @@ CREATE TABLE IF NOT EXISTS outbox_messages (
     event_type VARCHAR(50) NOT NULL,
     payload TEXT NOT NULL,
     processed BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    version BIGINT NOT NULL DEFAULT 0
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_accounts_account_number ON accounts(account_number);

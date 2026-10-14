@@ -17,6 +17,6 @@ public interface OutboxMessageRepository extends ReactiveCrudRepository<OutboxMe
     Flux<OutboxMessage> findUnprocessed(int limit);
 
     @Modifying
-    @Query("UPDATE outbox_messages SET processed = true, version = version + 1 WHERE id IN (:ids)")
+    @Query("UPDATE outbox_messages SET processed = true WHERE id IN (:ids) AND processed = false")
     Mono<Integer> markAsProcessed(Collection<Long> ids);
 }
