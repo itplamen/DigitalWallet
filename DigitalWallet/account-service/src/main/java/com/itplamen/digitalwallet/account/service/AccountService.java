@@ -39,7 +39,7 @@ public class AccountService {
     }
 
     public  Mono<Account> get(String accountNumber) {
-        return  accountRepository.findByAccountNumber(accountNumber)
+        return accountRepository.findByAccountNumber(accountNumber)
                 .switchIfEmpty(Mono.error(new AccountNotFoundException(accountNumber)));
     }
 
