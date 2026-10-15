@@ -2,8 +2,6 @@ package com.itplamen.digitalwallet.transfer.service;
 
 import com.itplamen.digitalwallet.transfer.dto.TransferInitiationResult;
 import com.itplamen.digitalwallet.transfer.dto.TransferRequest;
-import com.itplamen.digitalwallet.transfer.entity.AuditLog;
-import com.itplamen.digitalwallet.transfer.entity.OutboxMessage;
 import com.itplamen.digitalwallet.transfer.entity.Transfer;
 import com.itplamen.digitalwallet.transfer.entity.TransferStatus;
 import com.itplamen.digitalwallet.transfer.entity.TransferType;
@@ -11,8 +9,6 @@ import com.itplamen.digitalwallet.transfer.exception.IdempotencyConflictExceptio
 import com.itplamen.digitalwallet.transfer.exception.InvalidTransferStatusTransitionException;
 import com.itplamen.digitalwallet.transfer.exception.TransferNotFoundException;
 import com.itplamen.digitalwallet.transfer.exception.UnsupportedTransferTypeException;
-import com.itplamen.digitalwallet.transfer.repository.AuditLogRepository;
-import com.itplamen.digitalwallet.transfer.repository.OutboxMessageRepository;
 import com.itplamen.digitalwallet.transfer.repository.TransferRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,8 +16,6 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Mono;
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
 import java.util.Locale;
@@ -32,10 +26,9 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class TransferService {
 
-    private final ObjectMapper objectMapper;
     private final TransferRepository transferRepository;
-    private final AuditLogRepository auditLogRepository;
-    private final OutboxMessageRepository outboxEventRepository;
+    private final TransferAuditService transferAuditService;
+    private final TransferEventOutboxService transferEventOutboxService;
     private final TransactionalOperator transactionalOperator;
 
     public Mono<TransferInitiationResult> initiateTransfer(TransferRequest request) {
@@ -75,16 +68,11 @@ public class TransferService {
                     Instant now = Instant.now();
                     transfer.setStatus(targetStatus);
                     transfer.setUpdatedAt(now);
-                    AuditLog auditLog = AuditLog.builder()
-                            .transferId(transferId)
-                            .fromStatus(currentStatus)
-                            .toStatus(targetStatus)
-                            .reason(reason)
-                            .createdAt(now)
-                            .build();
-
                     return transferRepository.save(transfer)
-                            .flatMap(saved -> auditLogRepository.save(auditLog).thenReturn(saved));
+                            .flatMap(saved -> transferAuditService
+                                    .recordStatusTransition(
+                                            transferId, currentStatus, targetStatus, reason, now)
+                                    .thenReturn(saved));
                 })
                 .as(transactionalOperator::transactional);
     }
@@ -142,11 +130,8 @@ public class TransferService {
 
         return transferRepository.save(newTransfer)
                 .flatMap(savedTransfer -> {
-                    AuditLog auditLog = buildAuditLog(savedTransfer);
-                    OutboxMessage outboxEvent = buildOutboxEvent(savedTransfer);
-
-                    return auditLogRepository.save(auditLog)
-                            .then(outboxEventRepository.save(outboxEvent))
+                    return transferAuditService.recordInitiated(savedTransfer)
+                            .then(transferEventOutboxService.saveInitiated(savedTransfer))
                             .thenReturn(savedTransfer);
                 })
                 .doOnSuccess(transfer -> log.info("Successfully initiated transfer ID: {}", transfer.getId()))
@@ -165,32 +150,4 @@ public class TransferService {
                 .createdAt(Instant.now())
                 .build();
     }
-
-    private AuditLog buildAuditLog(Transfer transfer) {
-        return AuditLog.builder()
-                .transferId(transfer.getId())
-                .fromStatus(null)
-                .toStatus(TransferStatus.PENDING)
-                .reason("Transfer initiated")
-                .createdAt(Instant.now())
-                .build();
-    }
-
-    private OutboxMessage buildOutboxEvent(Transfer transfer) {
-        try {
-            String payload = objectMapper.writeValueAsString(transfer);
-
-            return OutboxMessage.builder()
-                    .aggregateType("Transfer")
-                    .aggregateId(String.valueOf(transfer.getId()))
-                    .eventType("TRANSFER_INITIATED")
-                    .payload(payload)
-                    .processed(false)
-                    .createdAt(Instant.now())
-                    .build();
-        } catch (JacksonException e) {
-            throw new IllegalStateException("Failed to serialize transfer to outbox payload", e);
-        }
-    }
-
 }
