@@ -10,6 +10,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
+import java.util.UUID;
+
 @RestController
 @RequestMapping("/api/v1/transfers")
 @RequiredArgsConstructor
@@ -26,7 +28,7 @@ public class TransferController {
     }
 
     @GetMapping("/{transferId}")
-    public Mono<Transfer> getTransfer(@PathVariable Long transferId) {
+    public Mono<Transfer> getTransfer(@PathVariable UUID transferId) {
         return transferService.getTransfer(transferId);
     }
 }

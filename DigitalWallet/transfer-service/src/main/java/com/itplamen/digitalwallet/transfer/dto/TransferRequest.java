@@ -1,24 +1,21 @@
 package com.itplamen.digitalwallet.transfer.dto;
 
-import com.itplamen.digitalwallet.transfer.entity.TransferType;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 public record TransferRequest(
-        @NotNull(message = "Source wallet ID is required")
-        @Positive(message = "Source wallet ID must be positive")
-        Long sourceWalletId,
+        @NotNull(message = "Source account ID is required")
+        UUID sourceAccountId,
 
-        @NotNull(message = "Target wallet ID is required")
-        @Positive(message = "Target wallet ID must be positive")
-        Long targetWalletId,
+        @NotNull(message = "Target account ID is required")
+        UUID targetAccountId,
 
         @NotNull(message = "Amount is required")
         @Positive(message = "Amount must be positive")
@@ -27,17 +24,10 @@ public record TransferRequest(
 
         @NotBlank(message = "Currency is required")
         @Pattern(regexp = "[A-Za-z]{3}", message = "Currency must be a 3-letter code")
-        String currency,
-
-        @NotNull(message = "Transfer type is required")
-        TransferType type,
-
-        @NotBlank(message = "Idempotency key is required")
-        @Size(max = 128, message = "Idempotency key must not exceed 128 characters")
-        String idempotencyKey
+        String currency
 ) {
-    @AssertTrue(message = "Source and target wallets must be different")
-        public boolean isWalletPairValid() {
-        return sourceWalletId == null || targetWalletId == null || !sourceWalletId.equals(targetWalletId);
+    @AssertTrue(message = "Source and target accounts must be different")
+    public boolean isAccountPairValid() {
+        return sourceAccountId == null || targetAccountId == null || !sourceAccountId.equals(targetAccountId);
     }
 }

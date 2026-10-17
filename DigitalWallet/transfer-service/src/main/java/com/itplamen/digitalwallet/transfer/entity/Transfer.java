@@ -11,6 +11,7 @@ import org.springframework.data.relational.core.mapping.Table;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.UUID;
 
 @Data
 @Builder
@@ -21,13 +22,13 @@ public class Transfer {
 
     @Id
     @Column("id")
-    private Long id;
+    private UUID id;
 
-    @Column("source_wallet_id")
-    private Long sourceWalletId;
+    @Column("source_account_id")
+    private UUID sourceAccountId;
 
-    @Column("target_wallet_id")
-    private Long targetWalletId;
+    @Column("target_account_id")
+    private UUID targetAccountId;
 
     @Column("amount")
     private BigDecimal amount;
@@ -35,14 +36,8 @@ public class Transfer {
     @Column("currency")
     private String currency;
 
-    @Column("type")
-    private TransferType type;
-
     @Column("status")
     private TransferStatus status;
-
-    @Column("idempotency_key")
-    private String idempotencyKey;
 
     @Column("created_at")
     private Instant createdAt;

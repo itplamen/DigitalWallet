@@ -1,7 +1,9 @@
 package com.itplamen.digitalwallet.transfer.exception;
 
+import java.util.UUID;
+
 public class TransferNotFoundException extends RuntimeException {
-    public TransferNotFoundException(Long transferId) {
+    public TransferNotFoundException(UUID transferId) {
         super("Transfer not found: " + transferId);
     }
 }

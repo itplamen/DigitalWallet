@@ -15,6 +15,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
+import java.util.UUID;
 
 @Slf4j
 @Component
@@ -70,16 +71,15 @@ public class TransferEventConsumer {
 
     private Optional<TransferStatus> mapEventToStatus(String eventType) {
         return switch (eventType) {
-            case "WALLET_DEBITED" -> Optional.of(TransferStatus.SOURCE_DEBITED);
+            case "WALLET_DEBITED" -> Optional.of(TransferStatus.PENDING);
             case "WALLET_DEBIT_FAILED" -> Optional.of(TransferStatus.FAILED);
             case "WALLET_TRANSFER_SETTLED" -> Optional.of(TransferStatus.COMPLETED);
             case "WALLET_TRANSFER_FAILED" -> Optional.of(TransferStatus.FAILED);
             case "TRANSFER_COMPLETED" -> Optional.of(TransferStatus.COMPLETED);
-            case "TRANSFER_REVERSED" -> Optional.of(TransferStatus.REVERSED);
             default -> Optional.empty();
         };
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record WalletEventPayload(Long transferId, String reason) { }
+    public record WalletEventPayload(UUID transferId, String reason) { }
 }

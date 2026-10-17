@@ -3,6 +3,7 @@ package com.itplamen.digitalwallet.transfer.service;
 import com.itplamen.digitalwallet.transfer.entity.OutboxMessage;
 import com.itplamen.digitalwallet.transfer.entity.Transfer;
 import com.itplamen.digitalwallet.transfer.repository.OutboxMessageRepository;
+import io.r2dbc.postgresql.codec.Json;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
@@ -31,8 +32,7 @@ public class TransferEventOutboxService {
                     .aggregateType("Transfer")
                     .aggregateId(String.valueOf(transfer.getId()))
                     .eventType("TRANSFER_INITIATED")
-                    .payload(payload)
-                    .processed(false)
+                    .payload(Json.of(payload))
                     .createdAt(Instant.now())
                     .build();
         } catch (JacksonException e) {

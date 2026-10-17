@@ -9,6 +9,7 @@ import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Data
 @Builder
@@ -22,7 +23,7 @@ public class AuditLog {
     private Long id;
 
     @Column("transfer_id")
-    private Long transferId;
+    private UUID transferId;
 
     @Column("from_status")
     private TransferStatus fromStatus;

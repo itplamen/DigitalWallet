@@ -4,15 +4,11 @@ import com.itplamen.digitalwallet.transfer.dto.TransferInitiationResult;
 import com.itplamen.digitalwallet.transfer.dto.TransferRequest;
 import com.itplamen.digitalwallet.transfer.entity.Transfer;
 import com.itplamen.digitalwallet.transfer.entity.TransferStatus;
-import com.itplamen.digitalwallet.transfer.entity.TransferType;
-import com.itplamen.digitalwallet.transfer.exception.IdempotencyConflictException;
 import com.itplamen.digitalwallet.transfer.exception.InvalidTransferStatusTransitionException;
 import com.itplamen.digitalwallet.transfer.exception.TransferNotFoundException;
-import com.itplamen.digitalwallet.transfer.exception.UnsupportedTransferTypeException;
 import com.itplamen.digitalwallet.transfer.repository.TransferRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Mono;
@@ -20,6 +16,7 @@ import reactor.core.publisher.Mono;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.Set;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -33,25 +30,17 @@ public class TransferService {
 
     public Mono<TransferInitiationResult> initiateTransfer(TransferRequest request) {
         TransferRequest normalizedRequest = normalizeRequest(request);
-        String idempotencyKey = normalizedRequest.idempotencyKey();
-
-        return transferRepository.findByIdempotencyKey(idempotencyKey)
-                .flatMap(existing -> resolveIdempotency(existing, normalizedRequest))
-                .switchIfEmpty(Mono.defer(() -> createTransfer(normalizedRequest)
-                        .as(transactionalOperator::transactional)
-                        .map(transfer -> new TransferInitiationResult(transfer, true))
-                        .onErrorResume(DataIntegrityViolationException.class, error ->
-                                transferRepository.findByIdempotencyKey(idempotencyKey)
-                                        .flatMap(existing -> resolveIdempotency(existing, normalizedRequest))
-                                        .switchIfEmpty(Mono.error(error)))));
+        return createTransfer(normalizedRequest)
+                .as(transactionalOperator::transactional)
+                .map(transfer -> new TransferInitiationResult(transfer, true));
     }
 
-    public Mono<Transfer> getTransfer(Long transferId) {
+    public Mono<Transfer> getTransfer(UUID transferId) {
         return transferRepository.findById(transferId)
                 .switchIfEmpty(Mono.error(new TransferNotFoundException(transferId)));
     }
 
-    public Mono<Transfer> transitionStatus(Long transferId, TransferStatus targetStatus, String reason) {
+    public Mono<Transfer> transitionStatus(UUID transferId, TransferStatus targetStatus, String reason) {
         return transferRepository.findById(transferId)
                 .switchIfEmpty(Mono.error(new TransferNotFoundException(transferId)))
                 .flatMap(transfer -> {
@@ -77,35 +66,12 @@ public class TransferService {
                 .as(transactionalOperator::transactional);
     }
 
-    private Mono<TransferInitiationResult> resolveIdempotency(
-            Transfer existing,
-            TransferRequest request) {
-        if (!matches(existing, request)) {
-            return Mono.error(new IdempotencyConflictException(request.idempotencyKey()));
-        }
-        log.info("Idempotency hit for key: {}", request.idempotencyKey());
-        return Mono.just(new TransferInitiationResult(existing, false));
-    }
-
-    private boolean matches(Transfer transfer, TransferRequest request) {
-        return transfer.getSourceWalletId().equals(request.sourceWalletId())
-                && transfer.getTargetWalletId().equals(request.targetWalletId())
-                && transfer.getAmount().compareTo(request.amount()) == 0
-                && transfer.getCurrency().equals(request.currency())
-                && transfer.getType() == request.type();
-    }
-
     private TransferRequest normalizeRequest(TransferRequest request) {
-        if (request.type() != TransferType.P2P) {
-            throw new UnsupportedTransferTypeException(request.type());
-        }
         return new TransferRequest(
-                request.sourceWalletId(),
-                request.targetWalletId(),
+                request.sourceAccountId(),
+                request.targetAccountId(),
                 request.amount(),
-                request.currency().toUpperCase(Locale.ROOT),
-                request.type(),
-                request.idempotencyKey().strip());
+                request.currency().toUpperCase(Locale.ROOT));
     }
 
     private boolean isAllowedTransition(TransferStatus current, TransferStatus target) {
@@ -114,14 +80,9 @@ public class TransferService {
         }
         return switch (current) {
             case PENDING -> Set.of(
-                    TransferStatus.SOURCE_DEBITED,
                     TransferStatus.COMPLETED,
                     TransferStatus.FAILED).contains(target);
-            case SOURCE_DEBITED -> Set.of(
-                    TransferStatus.COMPLETED,
-                    TransferStatus.FAILED,
-                    TransferStatus.REVERSED).contains(target);
-            case COMPLETED, FAILED, REVERSED -> false;
+            case COMPLETED, FAILED -> false;
         };
     }
 
@@ -140,13 +101,11 @@ public class TransferService {
 
     private Transfer buildTransfer(TransferRequest request) {
         return Transfer.builder()
-                .sourceWalletId(request.sourceWalletId())
-                .targetWalletId(request.targetWalletId())
+                .sourceAccountId(request.sourceAccountId())
+                .targetAccountId(request.targetAccountId())
                 .amount(request.amount())
                 .currency(request.currency())
-                .type(request.type())
                 .status(TransferStatus.PENDING)
-                .idempotencyKey(request.idempotencyKey())
                 .createdAt(Instant.now())
                 .build();
     }

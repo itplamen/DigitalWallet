@@ -6,9 +6,11 @@ import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 
+import java.util.UUID;
+
 @Repository
 public interface AuditLogRepository extends ReactiveCrudRepository<AuditLog, Long> {
 
     @Query("SELECT * FROM audit_logs WHERE transfer_id = :transferId")
-    Flux<AuditLog> findByTransferId(Long transferId);
+    Flux<AuditLog> findByTransferId(UUID transferId);
 }

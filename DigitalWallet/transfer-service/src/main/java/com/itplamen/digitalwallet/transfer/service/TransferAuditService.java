@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -22,7 +23,7 @@ public class TransferAuditService {
     }
 
     public Mono<Void> recordStatusTransition(
-            Long transferId,
+            UUID transferId,
             TransferStatus fromStatus,
             TransferStatus toStatus,
             String reason,

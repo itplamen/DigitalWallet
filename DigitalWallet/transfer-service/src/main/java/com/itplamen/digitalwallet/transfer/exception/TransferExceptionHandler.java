@@ -27,11 +27,6 @@ public class TransferExceptionHandler {
         return field + ": " + error.getDefaultMessage();
     }
 
-    @ExceptionHandler(IdempotencyConflictException.class)
-    public ProblemDetail handleIdempotencyConflict(IdempotencyConflictException exception) {
-        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
-    }
-
     @ExceptionHandler(InvalidTransferStatusTransitionException.class)
     public ProblemDetail handleInvalidTransition(InvalidTransferStatusTransitionException exception) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
@@ -42,8 +37,4 @@ public class TransferExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, exception.getMessage());
     }
 
-    @ExceptionHandler(UnsupportedTransferTypeException.class)
-    public ProblemDetail handleUnsupportedType(UnsupportedTransferTypeException exception) {
-        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
-    }
 }
