@@ -11,6 +11,7 @@ import org.springframework.data.relational.core.mapping.Table;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.UUID;
 
 @Data
 @Builder
@@ -21,10 +22,10 @@ public class Wallet {
 
     @Id
     @Column("id")
-    private Long id;
+    private UUID id;
 
-    @Column("user_id")
-    private Long userId;
+    @Column("account_id")
+    private UUID accountId;
 
     @Column("balance")
     private BigDecimal balance;

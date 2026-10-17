@@ -10,9 +10,12 @@ import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.UUID;
 
 @Repository
-public interface WalletRepository extends ReactiveCrudRepository<Wallet, Long> {
+public interface WalletRepository extends ReactiveCrudRepository<Wallet, UUID> {
+
+    Mono<Wallet> findByAccountIdAndCurrency(UUID accountId, String currency);
 
     @Modifying
     @Query("""
@@ -21,7 +24,7 @@ public interface WalletRepository extends ReactiveCrudRepository<Wallet, Long> {
             WHERE id = :walletId AND currency = :currency AND balance >= :amount
             """)
     Mono<Integer> debitIfSufficientFunds(
-            @Param("walletId") Long walletId,
+            @Param("walletId") UUID walletId,
             @Param("currency") String currency,
             @Param("amount") BigDecimal amount,
             @Param("updatedAt") Instant updatedAt);
@@ -33,7 +36,7 @@ public interface WalletRepository extends ReactiveCrudRepository<Wallet, Long> {
             WHERE id = :walletId AND currency = :currency
             """)
     Mono<Integer> credit(
-            @Param("walletId") Long walletId,
+            @Param("walletId") UUID walletId,
             @Param("currency") String currency,
             @Param("amount") BigDecimal amount,
             @Param("updatedAt") Instant updatedAt);

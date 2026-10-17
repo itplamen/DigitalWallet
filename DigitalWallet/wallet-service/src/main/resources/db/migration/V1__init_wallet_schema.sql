@@ -1,11 +1,12 @@
 CREATE TABLE IF NOT EXISTS wallets (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    user_id BIGINT NOT NULL UNIQUE,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    account_id UUID NOT NULL,
     balance NUMERIC(19, 8) NOT NULL CHECK (balance >= 0),
     currency VARCHAR(3) NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    updated_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ,
     version BIGINT NOT NULL DEFAULT 0,
+    CONSTRAINT uq_wallets_account_currency UNIQUE (account_id, currency),
     CONSTRAINT chk_wallets_currency_format CHECK (currency ~ '^[A-Z]{3}$')
 );
 
@@ -23,8 +24,8 @@ CREATE INDEX IF NOT EXISTS idx_outbox_messages_unprocessed ON outbox_messages (p
 
 CREATE TABLE ledger_entries (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    wallet_id BIGINT NOT NULL,
-    transfer_id BIGINT,
+    wallet_id UUID NOT NULL,
+    transfer_id UUID,
     entry_type VARCHAR(20) NOT NULL,
     amount NUMERIC(19, 8) NOT NULL CHECK (amount > 0),
     currency VARCHAR(3) NOT NULL,
@@ -42,7 +43,7 @@ CREATE TABLE ledger_entries (
 CREATE INDEX idx_ledger_entries_wallet_created ON ledger_entries (wallet_id, created_at, id);
 
 CREATE TABLE transfers (
-    transfer_id BIGINT PRIMARY KEY,
+    transfer_id UUID PRIMARY KEY,
     status VARCHAR(20) NOT NULL CHECK (status IN ('COMPLETED', 'FAILED')),
     reason VARCHAR(100),
     created_at TIMESTAMP WITH TIME ZONE NOT NULL,

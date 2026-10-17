@@ -10,6 +10,7 @@ import org.springframework.data.relational.core.mapping.Table;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.UUID;
 
 @Data
 @Builder
@@ -23,10 +24,10 @@ public class LedgerEntry {
     private Long id;
 
     @Column("wallet_id")
-    private Long walletId;
+    private UUID walletId;
 
     @Column("transfer_id")
-    private Long transferId;
+    private UUID transferId;
 
     @Column("entry_type")
     private String entryType;

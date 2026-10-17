@@ -20,6 +20,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -46,18 +47,19 @@ public class WalletService {
     }
 
     private Mono<Void> settleTransfer(TransferEventPayload payload) {
-        if (payload.sourceWalletId().equals(payload.targetWalletId())) {
-            return recordFailure(payload.id(), "SOURCE_AND_TARGET_WALLETS_MUST_DIFFER");
+        if (payload.sourceAccountId().equals(payload.targetAccountId())) {
+            return recordFailure(payload.id(), "SOURCE_AND_TARGET_ACCOUNTS_MUST_DIFFER");
         }
 
-        return walletRepository.findById(payload.sourceWalletId())
+        String currency = normalizeCurrency(payload.currency());
+        return walletRepository.findByAccountIdAndCurrency(payload.sourceAccountId(), currency)
                 .switchIfEmpty(Mono.defer(() -> recordFailure(payload.id(), "SOURCE_WALLET_NOT_FOUND")
                         .then(Mono.empty())))
-                .flatMap(sourceWallet -> walletRepository.findById(payload.targetWalletId())
+                .flatMap(sourceWallet -> walletRepository.findByAccountIdAndCurrency(
+                                payload.targetAccountId(), currency)
                         .switchIfEmpty(Mono.defer(() -> recordFailure(payload.id(), "TARGET_WALLET_NOT_FOUND")
                                 .then(Mono.empty())))
                         .flatMap(targetWallet -> {
-                            String currency = normalizeCurrency(payload.currency());
                             if (!currency.equals(sourceWallet.getCurrency())
                                     || !currency.equals(targetWallet.getCurrency())) {
                                 return recordFailure(payload.id(), "CURRENCY_MISMATCH");
@@ -66,7 +68,7 @@ public class WalletService {
                         }));
     }
 
-    private Mono<Void> postTransfer(TransferEventPayload payload, Long sourceWalletId, Long targetWalletId) {
+    private Mono<Void> postTransfer(TransferEventPayload payload, UUID sourceWalletId, UUID targetWalletId) {
         Instant now = Instant.now();
         String currency = normalizeCurrency(payload.currency());
         return walletRepository.debitIfSufficientFunds(
@@ -88,8 +90,8 @@ public class WalletService {
 
     private Mono<Void> saveLedgerEntries(
             TransferEventPayload payload,
-            Long sourceWalletId,
-            Long targetWalletId,
+            UUID sourceWalletId,
+            UUID targetWalletId,
             Instant now) {
         List<LedgerEntry> entries = List.of(
                 buildLedgerEntry(sourceWalletId, payload, "DEBIT", now),
@@ -100,7 +102,7 @@ public class WalletService {
     }
 
     private LedgerEntry buildLedgerEntry(
-            Long walletId,
+            UUID walletId,
             TransferEventPayload payload,
             String entryType,
             Instant createdAt) {
@@ -114,12 +116,12 @@ public class WalletService {
                 .build();
     }
 
-    private Mono<Void> recordFailure(Long transferId, String reason) {
+    private Mono<Void> recordFailure(UUID transferId, String reason) {
         log.warn("Transfer {} failed in wallet settlement: {}", transferId, reason);
         return recordResult(transferId, "FAILED", reason, "WALLET_TRANSFER_FAILED");
     }
 
-    private Mono<Void> recordResult(Long transferId, String status, String reason, String eventType) {
+    private Mono<Void> recordResult(UUID transferId, String status, String reason, String eventType) {
         Instant now = Instant.now();
         Transfer result = Transfer.builder()
                 .transferId(transferId)
@@ -132,7 +134,7 @@ public class WalletService {
     }
 
     private Mono<Void> saveOutbox(
-            Long transferId,
+            UUID transferId,
             String eventType,
             WalletTransferOutcome outcome,
             Instant createdAt) {
@@ -157,11 +159,8 @@ public class WalletService {
     private void validate(TransferEventPayload payload) {
         if (payload == null
                 || payload.id() == null
-                || payload.id() <= 0
-                || payload.sourceWalletId() == null
-                || payload.sourceWalletId() <= 0
-                || payload.targetWalletId() == null
-                || payload.targetWalletId() <= 0
+                || payload.sourceAccountId() == null
+                || payload.targetAccountId() == null
                 || payload.amount() == null
                 || payload.amount().signum() <= 0
                 || payload.currency() == null
@@ -181,12 +180,12 @@ public class WalletService {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record TransferEventPayload(
-            Long id,
-            Long sourceWalletId,
-            Long targetWalletId,
+            UUID id,
+            UUID sourceAccountId,
+            UUID targetAccountId,
             BigDecimal amount,
             String currency
     ) {}
 
-    public record WalletTransferOutcome(Long transferId, String status, String reason) {}
+    public record WalletTransferOutcome(UUID transferId, String status, String reason) {}
 }

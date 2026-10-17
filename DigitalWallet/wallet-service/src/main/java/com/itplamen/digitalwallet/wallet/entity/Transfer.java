@@ -9,6 +9,7 @@ import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Data
 @Builder
@@ -19,7 +20,7 @@ public class Transfer {
 
     @Id
     @Column("transfer_id")
-    private Long transferId;
+    private UUID transferId;
 
     @Column("status")
     private String status;
