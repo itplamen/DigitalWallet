@@ -7,8 +7,10 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
+import io.r2dbc.postgresql.codec.Json;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Data
 @Builder
@@ -19,7 +21,7 @@ public class OutboxMessage {
 
     @Id
     @Column("id")
-    private Long id;
+    private UUID id;
 
     @Column("aggregate_type")
     private String aggregateType;
@@ -31,10 +33,13 @@ public class OutboxMessage {
     private String eventType;
 
     @Column("payload")
-    private String payload;
+    private Json payload;
 
-    @Builder.Default
-    private Boolean processed = false;
+    @Column("headers")
+    private Json headers;
+
+    @Column("published_at")
+    private Instant publishedAt;
 
     @Column("created_at")
     private Instant createdAt;
