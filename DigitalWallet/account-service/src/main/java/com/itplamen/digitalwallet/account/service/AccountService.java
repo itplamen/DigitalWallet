@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -21,11 +22,16 @@ public class AccountService {
 
     private final AccountRepository accountRepository;
 
-    public Mono<Account> create(String accountNumber) {
+    public Mono<Account> create(String accountNumber, String customerName, String email) {
+        Instant now = Instant.now();
         Account account = Account.builder()
+                .id(UUID.randomUUID())
                 .accountNumber(accountNumber.strip())
+                .customerName(customerName)
+                .email(email)
                 .status(AccountStatus.ACTIVE)
-                .createdAt(Instant.now())
+                .kycChecked(false)
+                .createdAt(now)
                 .build();
 
         return accountRepository.save(account)
@@ -33,7 +39,7 @@ public class AccountService {
                         error -> new AccountAlreadyExistsException(account.getAccountNumber(), error));
     }
 
-    public Mono<Account> get(Long accountId) {
+    public Mono<Account> get(UUID accountId) {
         return accountRepository.findById(accountId)
                 .switchIfEmpty(Mono.error(new AccountNotFoundException(accountId)));
     }
@@ -43,7 +49,7 @@ public class AccountService {
                 .switchIfEmpty(Mono.error(new AccountNotFoundException(accountNumber)));
     }
 
-    public Mono<Account> updateStatus(Long accountId, AccountStatus requestedStatus) {
+    public Mono<Account> updateStatus(UUID accountId, AccountStatus requestedStatus) {
         return get(accountId)
                 .flatMap(account -> {
                     if (account.getStatus() == requestedStatus) {
@@ -56,12 +62,13 @@ public class AccountService {
                     }
 
                     account.setStatus(requestedStatus);
+                    account.setUpdatedAt(Instant.now());
 
                     return accountRepository.save(account);
                 });
     }
 
-    public Mono<AccountEligibilityResponse> checkEligibility(Long accountId) {
+    public Mono<AccountEligibilityResponse> checkEligibility(UUID accountId) {
         return accountRepository.findById(accountId)
                 .map(account -> account.getStatus() == AccountStatus.ACTIVE
                         ? new AccountEligibilityResponse(accountId, true, null)

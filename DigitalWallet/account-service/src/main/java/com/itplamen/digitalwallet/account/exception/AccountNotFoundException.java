@@ -1,8 +1,10 @@
 package com.itplamen.digitalwallet.account.exception;
 
+import java.util.UUID;
+
 public class AccountNotFoundException extends RuntimeException {
 
-    public AccountNotFoundException(Long accountId) {
+    public AccountNotFoundException(UUID accountId) {
         super("Account not found: " + accountId);
     }
 

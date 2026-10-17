@@ -6,8 +6,10 @@ import org.springframework.data.r2dbc.repository.R2dbcRepository;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Mono;
 
+import java.util.UUID;
+
 @Repository
-public interface AccountRepository extends R2dbcRepository<Account, Long> {
+public interface AccountRepository extends R2dbcRepository<Account, UUID> {
 
     @Query("SELECT * FROM accounts WHERE account_number = :accountNumber")
     Mono<Account> findByAccountNumber(String accountNumber);

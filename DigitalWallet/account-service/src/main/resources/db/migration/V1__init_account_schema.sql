@@ -1,8 +1,13 @@
 CREATE TABLE accounts (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     account_number VARCHAR(50) UNIQUE NOT NULL,
+    customer_name VARCHAR(255),
+    email VARCHAR(255),
     status VARCHAR(50) NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    kyc_checked BOOLEAN NOT NULL DEFAULT FALSE,
+    transfer_limit NUMERIC,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ,
     version BIGINT NOT NULL DEFAULT 0,
     CONSTRAINT chk_accounts_status CHECK (status IN ('ACTIVE', 'SUSPENDED', 'CLOSED'))
 );
