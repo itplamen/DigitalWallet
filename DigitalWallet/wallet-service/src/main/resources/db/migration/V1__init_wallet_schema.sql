@@ -21,9 +21,17 @@ CREATE TABLE IF NOT EXISTS outbox_messages (
     created_at TIMESTAMPTZ NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS inbox_messages (
+    id UUID NOT NULL DEFAULT gen_random_uuid(),
+    consumer VARCHAR(50) NOT NULL,
+    processed_at TIMESTAMPTZ,
+    PRIMARY KEY (id, consumer)
+);
+
 COMMENT ON COLUMN outbox_messages.id IS 'eventId';
 COMMENT ON COLUMN outbox_messages.aggregate_id IS 'Kafka key';
 COMMENT ON COLUMN outbox_messages.headers IS 'correlationId, traceparent';
+COMMENT ON COLUMN inbox_messages.id IS 'eventId';
 
 CREATE INDEX IF NOT EXISTS idx_outbox_messages_unpublished ON outbox_messages (created_at) WHERE published_at IS NULL;
 
