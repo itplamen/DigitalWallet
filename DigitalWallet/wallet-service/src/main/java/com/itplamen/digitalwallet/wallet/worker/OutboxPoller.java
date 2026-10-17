@@ -7,6 +7,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+import java.util.UUID;
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -17,22 +20,23 @@ public class OutboxPoller {
 
     @Scheduled(fixedDelay = 2000)
     public void pollAndPublishEvents() {
-        outboxMessageRepository.findUnprocessed(50)
+        outboxMessageRepository.findUnpublished(50)
                 .flatMap(event ->
                         walletEventProducer.publish(
                                         "wallet-events",
                                         event.getAggregateId(),
-                                        event.getPayload(),
+                                        event.getPayload().asString(),
                                         event.getEventType())
                                 .thenReturn(event)
                 )
                 .collectList()
                 .filter(events -> !events.isEmpty())
                 .flatMap(events -> {
-                    events.forEach(e -> e.setProcessed(true));
-                    return outboxMessageRepository.saveAll(events)
-                            .collectList()
-                            .doOnSuccess(saved -> log.info("Successfully published and marked {} wallet outbox events as processed", saved.size()));
+                    List<UUID> eventIds = events.stream().map(event -> event.getId()).toList();
+                    return outboxMessageRepository.markAsPublished(eventIds)
+                            .doOnSuccess(updatedCount -> log.info(
+                                    "Successfully published and marked {} wallet outbox events as published",
+                                    updatedCount));
                 })
                 .subscribe();
     }

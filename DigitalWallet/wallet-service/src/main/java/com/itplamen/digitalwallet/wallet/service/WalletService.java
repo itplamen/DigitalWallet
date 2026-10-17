@@ -8,6 +8,7 @@ import com.itplamen.digitalwallet.wallet.repository.LedgerEntryRepository;
 import com.itplamen.digitalwallet.wallet.repository.OutboxMessageRepository;
 import com.itplamen.digitalwallet.wallet.repository.WalletRepository;
 import com.itplamen.digitalwallet.wallet.repository.TransferRepository;
+import io.r2dbc.postgresql.codec.Json;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -144,9 +145,8 @@ public class WalletService {
                     .aggregateType("WALLET")
                     .aggregateId(transferId.toString())
                     .eventType(eventType)
-                    .payload(jsonPayload)
+                    .payload(Json.of(jsonPayload))
                     .createdAt(createdAt)
-                    .processed(false)
                     .build();
 
             return outboxRepository.save(outbox).then();
