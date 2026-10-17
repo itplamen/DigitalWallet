@@ -28,6 +28,16 @@ CREATE TABLE IF NOT EXISTS inbox_messages (
     PRIMARY KEY (id, consumer)
 );
 
+CREATE TABLE wallet_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    wallet_id UUID NOT NULL REFERENCES wallets(id) ON DELETE RESTRICT,
+    event_id UUID NOT NULL UNIQUE,
+    event_type VARCHAR(100) NOT NULL,
+    payload JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    version BIGINT NOT NULL DEFAULT 0
+);
+
 COMMENT ON COLUMN outbox_messages.id IS 'eventId';
 COMMENT ON COLUMN outbox_messages.aggregate_id IS 'Kafka key';
 COMMENT ON COLUMN outbox_messages.headers IS 'correlationId, traceparent';
@@ -55,12 +65,12 @@ CREATE TABLE ledger_entries (
 
 CREATE INDEX idx_ledger_entries_wallet_created ON ledger_entries (wallet_id, created_at, id);
 
-CREATE TABLE transfers (
-    transfer_id UUID PRIMARY KEY,
-    status VARCHAR(20) NOT NULL CHECK (status IN ('COMPLETED', 'FAILED')),
-    reason VARCHAR(100),
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    CONSTRAINT chk_transfer_result_reason
-        CHECK ((status = 'COMPLETED' AND reason IS NULL)
-            OR (status = 'FAILED' AND reason IS NOT NULL))
+CREATE TABLE reservations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    wallet_id UUID NOT NULL REFERENCES wallets(id) ON DELETE RESTRICT,
+    payment_id UUID NOT NULL UNIQUE,
+    amount NUMERIC(19, 8) NOT NULL CHECK (amount > 0),
+    status VARCHAR(20) NOT NULL CHECK (status IN ('ACTIVE', 'CAPTURED', 'RELEASED')),
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ
 );

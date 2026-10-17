@@ -1,10 +1,12 @@
 package com.itplamen.digitalwallet.wallet.entity;
 
+import io.r2dbc.postgresql.codec.Json;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Version;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
@@ -15,19 +17,29 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Table("transfers")
-public class Transfer {
+@Table("wallet_events")
+public class WalletEvent {
 
     @Id
-    @Column("transfer_id")
-    private UUID transferId;
+    @Column("id")
+    private UUID id;
 
-    @Column("status")
-    private String status;
+    @Column("wallet_id")
+    private UUID walletId;
 
-    @Column("reason")
-    private String reason;
+    @Column("event_id")
+    private UUID eventId;
+
+    @Column("event_type")
+    private String eventType;
+
+    @Column("payload")
+    private Json payload;
 
     @Column("created_at")
     private Instant createdAt;
+
+    @Version
+    @Column("version")
+    private Long version;
 }

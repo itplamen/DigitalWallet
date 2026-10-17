@@ -3,11 +3,12 @@ package com.itplamen.digitalwallet.wallet.service;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.itplamen.digitalwallet.wallet.entity.LedgerEntry;
 import com.itplamen.digitalwallet.wallet.entity.OutboxMessage;
-import com.itplamen.digitalwallet.wallet.entity.Transfer;
+import com.itplamen.digitalwallet.wallet.entity.Reservation;
+import com.itplamen.digitalwallet.wallet.entity.ReservationStatus;
 import com.itplamen.digitalwallet.wallet.repository.LedgerEntryRepository;
 import com.itplamen.digitalwallet.wallet.repository.OutboxMessageRepository;
+import com.itplamen.digitalwallet.wallet.repository.ReservationRepository;
 import com.itplamen.digitalwallet.wallet.repository.WalletRepository;
-import com.itplamen.digitalwallet.wallet.repository.TransferRepository;
 import io.r2dbc.postgresql.codec.Json;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,14 +32,14 @@ public class WalletService {
     private final ObjectMapper objectMapper;
     private final WalletRepository walletRepository;
     private final LedgerEntryRepository ledgerEntryRepository;
-    private final TransferRepository transferRepository;
+    private final ReservationRepository reservationRepository;
     private final OutboxMessageRepository outboxRepository;
     private final TransactionalOperator transactionalOperator;
 
     public Mono<Void> processTransfer(TransferEventPayload payload) {
         return Mono.defer(() -> {
                     validate(payload);
-                    return transferRepository.findById(payload.id())
+                    return reservationRepository.findByPaymentId(payload.id())
                             .hasElement()
                             .flatMap(alreadyProcessed -> alreadyProcessed
                                     ? Mono.empty()
@@ -58,25 +59,47 @@ public class WalletService {
                         .then(Mono.empty())))
                 .flatMap(sourceWallet -> walletRepository.findByAccountIdAndCurrency(
                                 payload.targetAccountId(), currency)
-                        .switchIfEmpty(Mono.defer(() -> recordFailure(payload.id(), "TARGET_WALLET_NOT_FOUND")
+                        .switchIfEmpty(Mono.defer(() -> createReservation(sourceWallet.getId(), payload)
+                                .flatMap(reservation -> releaseReservation(
+                                        reservation, "TARGET_WALLET_NOT_FOUND"))
                                 .then(Mono.empty())))
                         .flatMap(targetWallet -> {
                             if (!currency.equals(sourceWallet.getCurrency())
                                     || !currency.equals(targetWallet.getCurrency())) {
-                                return recordFailure(payload.id(), "CURRENCY_MISMATCH");
+                                return createReservation(sourceWallet.getId(), payload)
+                                        .flatMap(reservation -> releaseReservation(reservation, "CURRENCY_MISMATCH"));
                             }
-                            return postTransfer(payload, sourceWallet.getId(), targetWallet.getId());
+                            return createReservation(sourceWallet.getId(), payload)
+                                    .flatMap(reservation -> postTransfer(
+                                            payload, sourceWallet.getId(), targetWallet.getId(), reservation));
                         }));
     }
 
-    private Mono<Void> postTransfer(TransferEventPayload payload, UUID sourceWalletId, UUID targetWalletId) {
+    private Mono<Reservation> createReservation(UUID walletId, TransferEventPayload payload) {
+        Instant now = Instant.now();
+        Reservation reservation = Reservation.builder()
+                .id(UUID.randomUUID())
+                .walletId(walletId)
+                .paymentId(payload.id())
+                .amount(payload.amount())
+                .status(ReservationStatus.ACTIVE)
+                .createdAt(now)
+                .build();
+        return reservationRepository.save(reservation);
+    }
+
+    private Mono<Void> postTransfer(
+            TransferEventPayload payload,
+            UUID sourceWalletId,
+            UUID targetWalletId,
+            Reservation reservation) {
         Instant now = Instant.now();
         String currency = normalizeCurrency(payload.currency());
         return walletRepository.debitIfSufficientFunds(
                         sourceWalletId, currency, payload.amount(), now)
                 .flatMap(updatedRows -> {
                     if (updatedRows == 0) {
-                        return recordFailure(payload.id(), "INSUFFICIENT_FUNDS");
+                        return releaseReservation(reservation, "INSUFFICIENT_FUNDS");
                     }
                     return walletRepository.credit(targetWalletId, currency, payload.amount(), now)
                             .flatMap(creditedRows -> {
@@ -84,7 +107,7 @@ public class WalletService {
                                     return Mono.error(new IllegalStateException(
                                             "Target wallet changed during transfer settlement: " + targetWalletId));
                                 }
-                                return saveLedgerEntries(payload, sourceWalletId, targetWalletId, now);
+                                return saveLedgerEntries(payload, sourceWalletId, targetWalletId, reservation, now);
                             });
                 });
     }
@@ -93,12 +116,14 @@ public class WalletService {
             TransferEventPayload payload,
             UUID sourceWalletId,
             UUID targetWalletId,
+            Reservation reservation,
             Instant now) {
         List<LedgerEntry> entries = List.of(
                 buildLedgerEntry(sourceWalletId, payload, "DEBIT", now),
                 buildLedgerEntry(targetWalletId, payload, "CREDIT", now));
 
         return ledgerEntryRepository.saveAll(entries)
+                .then(completeReservation(reservation, ReservationStatus.CAPTURED))
                 .then(recordResult(payload.id(), "COMPLETED", null, "WALLET_TRANSFER_SETTLED"));
     }
 
@@ -122,16 +147,22 @@ public class WalletService {
         return recordResult(transferId, "FAILED", reason, "WALLET_TRANSFER_FAILED");
     }
 
+    private Mono<Void> releaseReservation(Reservation reservation, String reason) {
+        return completeReservation(reservation, ReservationStatus.RELEASED)
+                .then(recordFailure(reservation.getPaymentId(), reason));
+    }
+
+    private Mono<Void> completeReservation(Reservation reservation, ReservationStatus status) {
+        return reservationRepository.complete(reservation.getPaymentId(), status, Instant.now())
+                .flatMap(updatedRows -> updatedRows == 1
+                        ? Mono.empty()
+                        : Mono.error(new IllegalStateException(
+                                "Reservation was not active for payment " + reservation.getPaymentId())));
+    }
+
     private Mono<Void> recordResult(UUID transferId, String status, String reason, String eventType) {
         Instant now = Instant.now();
-        Transfer result = Transfer.builder()
-                .transferId(transferId)
-                .status(status)
-                .reason(reason)
-                .createdAt(now)
-                .build();
-        return transferRepository.save(result)
-                .then(saveOutbox(transferId, eventType, new WalletTransferOutcome(transferId, status, reason), now));
+        return saveOutbox(transferId, eventType, new WalletTransferOutcome(transferId, status, reason), now);
     }
 
     private Mono<Void> saveOutbox(
