@@ -33,6 +33,7 @@ public class WalletService {
 
     private final ObjectMapper objectMapper;
     private final WalletRepository walletRepository;
+    private final WalletEventStore walletEventStore;
     private final InboxMessageRepository inboxMessageRepository;
     private final ReservationRepository reservationRepository;
     private final OutboxMessageRepository outboxRepository;
@@ -74,7 +75,7 @@ public class WalletService {
                         return recordNotSettled(payload.id(), walletRejectionReason(walletsByAccount, payload.targetAccountId(), "TARGET"));
                     }
 
-                    return postTransfer(payload, sourceWallet.getId(), targetWallet.getId());
+                    return postTransfer(payload, sourceWallet, targetWallet);
                 });
     }
 
@@ -109,33 +110,43 @@ public class WalletService {
 
     private Mono<Void> postTransfer(
             TransferEventPayload payload,
-            UUID sourceWalletId,
-            UUID targetWalletId) {
+            Wallet sourceWallet,
+            Wallet targetWallet) {
+        if (sourceWallet.getBalance().compareTo(payload.amount()) < 0) {
+            return recordNotSettled(payload.id(), "INSUFFICIENT_FUNDS");
+        }
+
         Instant now = Instant.now();
         String currency = normalizeCurrency(payload.currency());
-        return walletRepository.debitIfSufficientFunds(
-                        sourceWalletId, currency, payload.amount(), now)
-                .flatMap(updatedRows -> {
-                    if (updatedRows == 0) {
-                        return recordNotSettled(payload.id(), "INSUFFICIENT_FUNDS");
-                    }
-                    return createReservation(sourceWalletId, payload)
-                            .flatMap(reservation -> walletRepository.credit(
-                                            targetWalletId, currency, payload.amount(), now)
-                                    .flatMap(creditedRows -> {
-                                        if (creditedRows != 1) {
-                                            return Mono.error(new IllegalStateException(
-                                                    "Target wallet changed during transfer settlement: " + targetWalletId));
-                                        }
-                                        return completeReservation(reservation, ReservationStatus.CAPTURED)
-                                                .then(saveBalanceEvent(
-                                                        payload, sourceWalletId, "WalletDebited", now))
-                                                .then(saveBalanceEvent(
-                                                        payload, targetWalletId, "WalletCredited", now))
-                                                .then(recordResult(
-                                                        payload.id(), "COMPLETED", null, "WalletTransferSettled"));
-                                    }));
-                });
+        return walletEventStore.apply(
+                        sourceWallet,
+                        "WalletDebited",
+                        new WalletDomainEvent(
+                                payload.id(),
+                                sourceWallet.getId(),
+                                sourceWallet.getAccountId(),
+                                targetWallet.getAccountId(),
+                                payload.amount(),
+                                currency),
+                        payload.amount().negate(),
+                        now)
+                .then(createReservation(sourceWallet.getId(), payload))
+                .flatMap(reservation -> walletEventStore.apply(
+                                targetWallet,
+                                "WalletCredited",
+                                new WalletDomainEvent(
+                                        payload.id(),
+                                        targetWallet.getId(),
+                                        targetWallet.getAccountId(),
+                                        sourceWallet.getAccountId(),
+                                        payload.amount(),
+                                        currency),
+                                payload.amount(),
+                                now)
+                        .then(completeReservation(reservation, ReservationStatus.CAPTURED)))
+                .then(saveBalanceEvent(payload, sourceWallet.getId(), "WalletDebited", now))
+                .then(saveBalanceEvent(payload, targetWallet.getId(), "WalletCredited", now))
+                .then(recordResult(payload.id(), "COMPLETED", null, "WalletTransferSettled"));
     }
 
     private Mono<Void> recordNotSettled(UUID transferId, String reason) {
@@ -218,4 +229,12 @@ public class WalletService {
     public record WalletTransferOutcome(UUID transferId, String status, String reason) {}
 
     public record WalletBalanceEvent(UUID transferId, UUID walletId, BigDecimal amount, String currency) {}
+
+    public record WalletDomainEvent(
+            UUID transferId,
+            UUID walletId,
+            UUID accountId,
+            UUID counterpartyAccountId,
+            BigDecimal amount,
+            String currency) {}
 }

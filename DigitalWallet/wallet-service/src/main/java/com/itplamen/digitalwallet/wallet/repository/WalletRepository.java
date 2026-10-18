@@ -16,7 +16,12 @@ import java.util.UUID;
 @Repository
 public interface WalletRepository extends ReactiveCrudRepository<Wallet, UUID> {
 
-    @Query("SELECT * FROM wallets WHERE account_id IN (:sourceAccountId, :targetAccountId)")
+    @Query("""
+            SELECT * FROM wallets
+            WHERE account_id IN (:sourceAccountId, :targetAccountId)
+            ORDER BY id
+            FOR UPDATE
+            """)
     Flux<Wallet> findByTransferAccounts(
             @Param("sourceAccountId") UUID sourceAccountId,
             @Param("targetAccountId") UUID targetAccountId);
@@ -24,24 +29,15 @@ public interface WalletRepository extends ReactiveCrudRepository<Wallet, UUID> {
     @Modifying
     @Query("""
             UPDATE wallets
-            SET balance = balance - :amount, updated_at = :updatedAt, version = version + 1
-            WHERE id = :walletId AND currency = :currency AND balance >= :amount
-            """)
-    Mono<Integer> debitIfSufficientFunds(
-            @Param("walletId") UUID walletId,
-            @Param("currency") String currency,
-            @Param("amount") BigDecimal amount,
-            @Param("updatedAt") Instant updatedAt);
-
-    @Modifying
-    @Query("""
-            UPDATE wallets
-            SET balance = balance + :amount, updated_at = :updatedAt, version = version + 1
+            SET balance = :balance, updated_at = :updatedAt, version = version + 1
             WHERE id = :walletId AND currency = :currency
+                AND version = :expectedVersion AND balance + :balanceDelta >= 0
             """)
-    Mono<Integer> credit(
+    Mono<Integer> updateBalanceProjection(
             @Param("walletId") UUID walletId,
             @Param("currency") String currency,
-            @Param("amount") BigDecimal amount,
+            @Param("balance") BigDecimal balance,
+            @Param("balanceDelta") BigDecimal balanceDelta,
+            @Param("expectedVersion") Long expectedVersion,
             @Param("updatedAt") Instant updatedAt);
 }

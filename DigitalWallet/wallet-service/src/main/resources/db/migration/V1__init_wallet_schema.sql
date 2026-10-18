@@ -11,13 +11,14 @@ CREATE TABLE IF NOT EXISTS wallets (
 );
 
 CREATE TABLE IF NOT EXISTS wallet_events (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     wallet_id UUID NOT NULL REFERENCES wallets(id) ON DELETE RESTRICT,
+    version BIGINT NOT NULL,
     event_id UUID NOT NULL UNIQUE,
     event_type VARCHAR(100) NOT NULL,
     payload JSONB NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL,
-    version BIGINT NOT NULL DEFAULT 0
+    metadata JSONB NOT NULL DEFAULT '{}'::JSONB,
+    occurred_at TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (wallet_id, version)
 );
 
 CREATE TABLE IF NOT EXISTS reservations (
