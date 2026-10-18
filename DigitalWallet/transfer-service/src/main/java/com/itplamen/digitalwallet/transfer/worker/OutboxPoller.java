@@ -23,7 +23,12 @@ public class OutboxPoller {
     public void pollAndPublishEvents() {
         outboxEventRepository.findUnpublished(50)
                 .flatMap(event ->
-                        kafkaEventProducer.publish("transfer-events", event.getAggregateId(), event.getPayload().asString())
+                        kafkaEventProducer.publish(
+                                        "transfer-events",
+                                        event.getAggregateId(),
+                                        event.getPayload().asString(),
+                                        event.getEventType(),
+                                        event.getId().toString())
                                 .thenReturn(event)
                 )
                 .collectList()
@@ -35,6 +40,7 @@ public class OutboxPoller {
                             .doOnSuccess(updatedCount ->
                                     log.info("Successfully published and marked {} events as published", updatedCount));
                 })
+                .doOnError(error -> log.error("Failed to relay transfer outbox events", error))
                 .subscribe();
     }
 }
