@@ -11,6 +11,7 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -22,6 +23,22 @@ public class TransferEventOutboxService {
     public Mono<Void> saveInitiated(Transfer transfer) {
         OutboxMessage outboxMessage = buildInitiatedEvent(transfer);
         return outboxMessageRepository.save(outboxMessage).then();
+    }
+
+    public Mono<Void> saveCompleted(Transfer transfer) {
+        try {
+            String payload = objectMapper.writeValueAsString(new TransferCompletedEvent(transfer.getId()));
+            OutboxMessage outboxMessage = OutboxMessage.builder()
+                    .aggregateType("Transfer")
+                    .aggregateId(transfer.getId().toString())
+                    .eventType("TransferCompleted")
+                    .payload(Json.of(payload))
+                    .createdAt(Instant.now())
+                    .build();
+            return outboxMessageRepository.save(outboxMessage).then();
+        } catch (JacksonException error) {
+            return Mono.error(new IllegalStateException("Failed to serialize TransferCompleted event for transfer " + transfer.getId(), error));
+        }
     }
 
     private OutboxMessage buildInitiatedEvent(Transfer transfer) {
@@ -39,4 +56,6 @@ public class TransferEventOutboxService {
             throw new IllegalStateException("Failed to serialize transfer to outbox payload", e);
         }
     }
+
+    public record TransferCompletedEvent(UUID transferId) { }
 }

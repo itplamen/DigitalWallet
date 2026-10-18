@@ -38,6 +38,10 @@ public class TransferEventConsumer {
 
             log.info("Received wallet event [type: {}], topic [{}], partition [{}]", eventType, record.topic(), record.partition());
 
+            if ("WalletTransferSettled".equals(eventType)) {
+                return processWalletTransferSettled(record);
+            }
+
             Optional<TransferStatus> targetStatus = mapEventToStatus(eventType);
 
             if (targetStatus.isEmpty()) {
@@ -69,11 +73,31 @@ public class TransferEventConsumer {
                 log.error("Failed to process wallet event from topic [{}], partition [{}]", record.topic(), record.partition(), error));
     }
 
+    private Mono<Void> processWalletTransferSettled(ConsumerRecord<String, String> record) {
+        Header eventIdHeader = record.headers().lastHeader("eventId");
+        if (eventIdHeader == null) {
+            return Mono.error(new IllegalArgumentException("Missing eventId header"));
+        }
+        if (record.value() == null || record.value().isBlank()) {
+            return Mono.error(new IllegalArgumentException("Empty wallet event payload"));
+        }
+
+        UUID eventId = UUID.fromString(new String(eventIdHeader.value(), StandardCharsets.UTF_8));
+        return Mono.fromCallable(() -> objectMapper.readValue(record.value(), WalletEventPayload.class))
+                .onErrorMap(JacksonException.class,
+                        error -> new IllegalArgumentException("Invalid wallet event JSON", error))
+                .flatMap(payload -> {
+                    if (payload.transferId() == null) {
+                        return Mono.error(new IllegalArgumentException("Missing transfer ID in wallet event"));
+                    }
+                    return transferService.processWalletTransferSettled(eventId, payload.transferId());
+                });
+    }
+
     private Optional<TransferStatus> mapEventToStatus(String eventType) {
         return switch (eventType) {
             case "WALLET_DEBITED" -> Optional.of(TransferStatus.PENDING);
             case "WALLET_DEBIT_FAILED" -> Optional.of(TransferStatus.FAILED);
-            case "WalletTransferSettled" -> Optional.of(TransferStatus.COMPLETED);
             case "WALLET_TRANSFER_FAILED" -> Optional.of(TransferStatus.FAILED);
             case "TRANSFER_COMPLETED" -> Optional.of(TransferStatus.COMPLETED);
             default -> Optional.empty();

@@ -6,6 +6,7 @@ import com.itplamen.digitalwallet.transfer.entity.Transfer;
 import com.itplamen.digitalwallet.transfer.entity.TransferStatus;
 import com.itplamen.digitalwallet.transfer.exception.InvalidTransferStatusTransitionException;
 import com.itplamen.digitalwallet.transfer.exception.TransferNotFoundException;
+import com.itplamen.digitalwallet.transfer.repository.InboxMessageRepository;
 import com.itplamen.digitalwallet.transfer.repository.TransferRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,7 +27,10 @@ public class TransferService {
     private final TransferAuditService transferAuditService;
     private final TransferEventOutboxService transferEventOutboxService;
     private final TransferIdempotencyService transferIdempotencyService;
+    private final InboxMessageRepository inboxMessageRepository;
     private final TransactionalOperator transactionalOperator;
+
+    private static final String WALLET_SETTLED_CONSUMER = "transfer-wallet-settled";
 
     public Mono<TransferInitiationResult> initiateTransfer(String idempotencyKey, TransferRequest request) {
         return transferIdempotencyService.execute(idempotencyKey, request, this::createTransfer);
@@ -59,6 +63,40 @@ public class TransferService {
                                     .recordStatusTransition(
                                             transferId, currentStatus, targetStatus, reason, now)
                                     .thenReturn(saved));
+                })
+                .as(transactionalOperator::transactional);
+    }
+
+    public Mono<Void> processWalletTransferSettled(UUID eventId, UUID transferId) {
+        return inboxMessageRepository.insert(eventId, WALLET_SETTLED_CONSUMER, Instant.now())
+                .flatMap(inserted -> {
+                    if (inserted == 0) {
+                        return Mono.empty();
+                    }
+                    return transferRepository.findById(transferId)
+                            .switchIfEmpty(Mono.error(new TransferNotFoundException(transferId)))
+                            .flatMap(transfer -> {
+                                if (transfer.getStatus() == TransferStatus.COMPLETED) {
+                                    return Mono.empty();
+                                }
+                                if (!isAllowedTransition(transfer.getStatus(), TransferStatus.COMPLETED)) {
+                                    return Mono.error(new InvalidTransferStatusTransitionException(
+                                            transferId, transfer.getStatus(), TransferStatus.COMPLETED));
+                                }
+
+                                Instant now = Instant.now();
+                                TransferStatus previousStatus = transfer.getStatus();
+                                transfer.setStatus(TransferStatus.COMPLETED);
+                                transfer.setUpdatedAt(now);
+                                return transferRepository.save(transfer)
+                                        .flatMap(saved -> transferAuditService.recordStatusTransition(
+                                                        transferId,
+                                                        previousStatus,
+                                                        TransferStatus.COMPLETED,
+                                                        "WalletTransferSettled",
+                                                        now)
+                                                .then(transferEventOutboxService.saveCompleted(saved)));
+                            });
                 })
                 .as(transactionalOperator::transactional);
     }
