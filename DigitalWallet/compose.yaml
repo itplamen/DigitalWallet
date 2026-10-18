@@ -9,6 +9,7 @@ services:
       TRANSFER_DB_PASSWORD: ${TRANSFER_DB_PASSWORD:?Set TRANSFER_DB_PASSWORD in .env}
       WALLET_DB_PASSWORD: ${WALLET_DB_PASSWORD:?Set WALLET_DB_PASSWORD in .env}
       PAYMENT_DB_PASSWORD: ${PAYMENT_DB_PASSWORD:?Set PAYMENT_DB_PASSWORD in .env}
+      NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD:?Set NOTIFICATION_DB_PASSWORD in .env}
     ports:
       - "5432:5432"
     volumes:
@@ -152,6 +153,33 @@ services:
       - "8083:8083"
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8083/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 45s
+      retries: 6
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: notification-service/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: 8084
+      SPRING_R2DBC_URL: r2dbc:postgresql://postgres:5432/notificationdb
+      SPRING_R2DBC_USERNAME: notification_user
+      SPRING_R2DBC_PASSWORD: ${NOTIFICATION_DB_PASSWORD:?Set NOTIFICATION_DB_PASSWORD in .env}
+      SPRING_FLYWAY_URL: jdbc:postgresql://postgres:5432/notificationdb
+      SPRING_FLYWAY_USER: notification_user
+      SPRING_FLYWAY_PASSWORD: ${NOTIFICATION_DB_PASSWORD:?Set NOTIFICATION_DB_PASSWORD in .env}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    ports:
+      - "8084:8084"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8084/actuator/health"]
       interval: 10s
       timeout: 5s
       start_period: 45s

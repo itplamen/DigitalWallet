@@ -23,6 +23,7 @@
         <module>transfer-service</module>
         <module>wallet-service</module>
         <module>payment-service</module>
+        <module>notification-service</module>
     </modules>
 
     <properties>
