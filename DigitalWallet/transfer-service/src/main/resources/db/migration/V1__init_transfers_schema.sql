@@ -42,13 +42,11 @@ CREATE TABLE IF NOT EXISTS inbox_messages (
 CREATE TABLE IF NOT EXISTS idempotency_keys (
     idempotency_key VARCHAR PRIMARY KEY,
     request_hash CHAR(64) NOT NULL,
-    status VARCHAR(20) NOT NULL,
     response_status INTEGER,
     response_body JSONB,
     transfer_id UUID REFERENCES transfers(id),
     created_at TIMESTAMPTZ NOT NULL,
-    expires_at TIMESTAMPTZ NOT NULL,
-    CONSTRAINT chk_idempotency_keys_status CHECK (status IN ('IN_PROGRESS', 'COMPLETED'))
+    expires_at TIMESTAMPTZ NOT NULL
 );
 
 COMMENT ON COLUMN outbox_messages.id IS 'eventId';

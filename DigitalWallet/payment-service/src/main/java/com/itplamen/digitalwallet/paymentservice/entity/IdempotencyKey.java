@@ -26,9 +26,6 @@ public class IdempotencyKey {
     @Column("request_hash")
     private String requestHash;
 
-    @Column("status")
-    private IdempotencyStatus status;
-
     @Column("response_status")
     private Integer responseStatus;
 
