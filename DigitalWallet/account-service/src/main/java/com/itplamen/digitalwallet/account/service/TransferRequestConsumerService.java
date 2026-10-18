@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Mono;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -54,7 +55,7 @@ public class TransferRequestConsumerService {
             UUID id,
             UUID sourceAccountId,
             UUID targetAccountId,
-            java.math.BigDecimal amount,
+            BigDecimal amount,
             String currency) {
     }
 }
