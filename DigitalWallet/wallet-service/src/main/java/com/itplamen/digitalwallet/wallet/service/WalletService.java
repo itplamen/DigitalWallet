@@ -1,12 +1,10 @@
 package com.itplamen.digitalwallet.wallet.service;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.itplamen.digitalwallet.wallet.entity.LedgerEntry;
 import com.itplamen.digitalwallet.wallet.entity.OutboxMessage;
 import com.itplamen.digitalwallet.wallet.entity.Reservation;
 import com.itplamen.digitalwallet.wallet.entity.ReservationStatus;
 import com.itplamen.digitalwallet.wallet.entity.Wallet;
-import com.itplamen.digitalwallet.wallet.repository.LedgerEntryRepository;
 import com.itplamen.digitalwallet.wallet.repository.InboxMessageRepository;
 import com.itplamen.digitalwallet.wallet.repository.OutboxMessageRepository;
 import com.itplamen.digitalwallet.wallet.repository.ReservationRepository;
@@ -35,7 +33,6 @@ public class WalletService {
 
     private final ObjectMapper objectMapper;
     private final WalletRepository walletRepository;
-    private final LedgerEntryRepository ledgerEntryRepository;
     private final InboxMessageRepository inboxMessageRepository;
     private final ReservationRepository reservationRepository;
     private final OutboxMessageRepository outboxRepository;
@@ -130,42 +127,15 @@ public class WalletService {
                                             return Mono.error(new IllegalStateException(
                                                     "Target wallet changed during transfer settlement: " + targetWalletId));
                                         }
-                                        return saveLedgerEntries(
-                                                payload, sourceWalletId, targetWalletId, reservation, now);
+                                        return completeReservation(reservation, ReservationStatus.CAPTURED)
+                                                .then(saveBalanceEvent(
+                                                        payload, sourceWalletId, "WalletDebited", now))
+                                                .then(saveBalanceEvent(
+                                                        payload, targetWalletId, "WalletCredited", now))
+                                                .then(recordResult(
+                                                        payload.id(), "COMPLETED", null, "WalletTransferSettled"));
                                     }));
                 });
-    }
-
-    private Mono<Void> saveLedgerEntries(
-            TransferEventPayload payload,
-            UUID sourceWalletId,
-            UUID targetWalletId,
-            Reservation reservation,
-            Instant now) {
-        List<LedgerEntry> entries = List.of(
-                buildLedgerEntry(sourceWalletId, payload, "DEBIT", now),
-                buildLedgerEntry(targetWalletId, payload, "CREDIT", now));
-
-        return ledgerEntryRepository.saveAll(entries)
-                .then(completeReservation(reservation, ReservationStatus.CAPTURED))
-                .then(saveBalanceEvent(payload, sourceWalletId, "WalletDebited", now))
-                .then(saveBalanceEvent(payload, targetWalletId, "WalletCredited", now))
-                .then(recordResult(payload.id(), "COMPLETED", null, "WalletTransferSettled"));
-    }
-
-    private LedgerEntry buildLedgerEntry(
-            UUID walletId,
-            TransferEventPayload payload,
-            String entryType,
-            Instant createdAt) {
-        return LedgerEntry.builder()
-                .walletId(walletId)
-                .transferId(payload.id())
-                .entryType(entryType)
-                .amount(payload.amount())
-                .currency(normalizeCurrency(payload.currency()))
-                .createdAt(createdAt)
-                .build();
     }
 
     private Mono<Void> recordNotSettled(UUID transferId, String reason) {

@@ -20,26 +20,6 @@ CREATE TABLE IF NOT EXISTS wallet_events (
     version BIGINT NOT NULL DEFAULT 0
 );
 
-CREATE TABLE ledger_entries (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    wallet_id UUID NOT NULL,
-    transfer_id UUID,
-    entry_type VARCHAR(20) NOT NULL,
-    amount NUMERIC(19, 8) NOT NULL CHECK (amount > 0),
-    currency VARCHAR(3) NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    CONSTRAINT fk_ledger_entries_wallet FOREIGN KEY (wallet_id) REFERENCES wallets(id) ON DELETE RESTRICT,
-    CONSTRAINT chk_ledger_entry_type CHECK (entry_type IN ('OPENING', 'DEBIT', 'CREDIT')),
-    CONSTRAINT uq_ledger_transfer_entry_type UNIQUE (transfer_id, entry_type),
-    CONSTRAINT chk_ledger_entry_transfer
-        CHECK (
-            (entry_type = 'OPENING' AND transfer_id IS NULL)
-                OR (entry_type IN ('DEBIT', 'CREDIT') AND transfer_id IS NOT NULL)
-            )
-);
-
-CREATE INDEX idx_ledger_entries_wallet_created ON ledger_entries (wallet_id, created_at, id);
-
 CREATE TABLE IF NOT EXISTS reservations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     wallet_id UUID NOT NULL REFERENCES wallets(id) ON DELETE RESTRICT,
