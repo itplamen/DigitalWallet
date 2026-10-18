@@ -22,6 +22,11 @@ public class TransferExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, detail);
     }
 
+    @ExceptionHandler(IdempotencyConflictException.class)
+    public ProblemDetail handleIdempotencyConflict(IdempotencyConflictException exception) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+    }
+
     private String formatValidationError(ObjectError error) {
         String field = error instanceof FieldError fieldError ? fieldError.getField() : "request";
         return field + ": " + error.getDefaultMessage();

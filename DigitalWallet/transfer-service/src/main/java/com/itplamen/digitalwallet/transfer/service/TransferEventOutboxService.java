@@ -31,7 +31,7 @@ public class TransferEventOutboxService {
             return OutboxMessage.builder()
                     .aggregateType("Transfer")
                     .aggregateId(String.valueOf(transfer.getId()))
-                    .eventType("TRANSFER_INITIATED")
+                    .eventType("TransferRequested")
                     .payload(Json.of(payload))
                     .createdAt(Instant.now())
                     .build();

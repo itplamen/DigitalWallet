@@ -20,7 +20,7 @@ public class AuditLog {
 
     @Id
     @Column("id")
-    private Long id;
+    private UUID id;
 
     @Column("transfer_id")
     private UUID transferId;

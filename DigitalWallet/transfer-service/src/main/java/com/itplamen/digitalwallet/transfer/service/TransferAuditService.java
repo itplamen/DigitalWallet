@@ -18,8 +18,7 @@ public class TransferAuditService {
     private final AuditLogRepository auditLogRepository;
 
     public Mono<Void> recordInitiated(Transfer transfer) {
-        return recordStatusTransition(
-                transfer.getId(), null, TransferStatus.PENDING, "Transfer initiated", Instant.now());
+        return recordStatusTransition(transfer.getId(), null, TransferStatus.PENDING, "Transfer initiated", Instant.now());
     }
 
     public Mono<Void> recordStatusTransition(

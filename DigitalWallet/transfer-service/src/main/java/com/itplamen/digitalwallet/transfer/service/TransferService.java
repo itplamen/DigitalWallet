@@ -14,7 +14,6 @@ import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
-import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 
@@ -26,13 +25,11 @@ public class TransferService {
     private final TransferRepository transferRepository;
     private final TransferAuditService transferAuditService;
     private final TransferEventOutboxService transferEventOutboxService;
+    private final TransferIdempotencyService transferIdempotencyService;
     private final TransactionalOperator transactionalOperator;
 
-    public Mono<TransferInitiationResult> initiateTransfer(TransferRequest request) {
-        TransferRequest normalizedRequest = normalizeRequest(request);
-        return createTransfer(normalizedRequest)
-                .as(transactionalOperator::transactional)
-                .map(transfer -> new TransferInitiationResult(transfer, true));
+    public Mono<TransferInitiationResult> initiateTransfer(String idempotencyKey, TransferRequest request) {
+        return transferIdempotencyService.execute(idempotencyKey, request, this::createTransfer);
     }
 
     public Mono<Transfer> getTransfer(UUID transferId) {
@@ -64,14 +61,6 @@ public class TransferService {
                                     .thenReturn(saved));
                 })
                 .as(transactionalOperator::transactional);
-    }
-
-    private TransferRequest normalizeRequest(TransferRequest request) {
-        return new TransferRequest(
-                request.sourceAccountId(),
-                request.targetAccountId(),
-                request.amount(),
-                request.currency().toUpperCase(Locale.ROOT));
     }
 
     private boolean isAllowedTransition(TransferStatus current, TransferStatus target) {
