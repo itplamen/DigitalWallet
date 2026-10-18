@@ -24,6 +24,7 @@
         <module>wallet-service</module>
         <module>payment-service</module>
         <module>notification-service</module>
+        <module>query-service</module>
     </modules>
 
     <properties>
