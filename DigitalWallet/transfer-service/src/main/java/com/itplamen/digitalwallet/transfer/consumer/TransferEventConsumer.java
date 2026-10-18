@@ -25,24 +25,44 @@ public class TransferEventConsumer {
 
     @KafkaListener(topics = "wallet-events", groupId = "transfer-service-group")
     public Mono<Void> consumeWalletEvent(ConsumerRecord<String, String> record) {
+        return consumeEvent(record, "WalletTransferSettled");
+    }
+
+    @KafkaListener(topics = "account-events", groupId = "transfer-service-group")
+    public Mono<Void> consumeAccountEvent(ConsumerRecord<String, String> record) {
         return Mono.defer(() -> {
-            Header header = record.headers().lastHeader("eventType");
-
-            if (header == null) {
-                return Mono.error(new IllegalArgumentException("Missing eventType header"));
-            }
-
-            String eventType = new String(header.value(), StandardCharsets.UTF_8);
-
-            log.info("Received wallet event [type: {}], topic [{}], partition [{}]", eventType, record.topic(), record.partition());
-
-            if (!"WalletTransferSettled".equals(eventType)) {
-                log.debug("Ignoring wallet event type: {}", eventType);
+            String eventType = eventType(record);
+            if (!"AccountsRejected".equals(eventType)) {
+                log.debug("Ignoring account event type: {}", eventType);
                 return Mono.empty();
             }
+
+            return processAccountsRejected(record);
+        }).doOnError(error -> log.error("Failed to process account event from topic [{}], partition [{}]", record.topic(), record.partition(), error));
+    }
+
+    private Mono<Void> consumeEvent(ConsumerRecord<String, String> record, String expectedEventType) {
+        return Mono.defer(() -> {
+            String eventType = eventType(record);
+
+            log.info("Received event [type: {}], topic [{}], partition [{}]", eventType, record.topic(), record.partition());
+
+            if (!expectedEventType.equals(eventType)) {
+                log.debug("Ignoring event type: {}", eventType);
+                return Mono.empty();
+            }
+
             return processWalletTransferSettled(record);
-        }).doOnError(error ->
-                log.error("Failed to process wallet event from topic [{}], partition [{}]", record.topic(), record.partition(), error));
+        }).doOnError(error -> log.error("Failed to process event from topic [{}], partition [{}]", record.topic(), record.partition(), error));
+    }
+
+    private String eventType(ConsumerRecord<String, String> record) {
+        Header header = record.headers().lastHeader("eventType");
+        if (header == null) {
+            throw new IllegalArgumentException("Missing eventType header");
+        }
+
+        return new String(header.value(), StandardCharsets.UTF_8);
     }
 
     private Mono<Void> processWalletTransferSettled(ConsumerRecord<String, String> record) {
@@ -66,6 +86,34 @@ public class TransferEventConsumer {
                 });
     }
 
+    private Mono<Void> processAccountsRejected(ConsumerRecord<String, String> record) {
+        UUID eventId = eventId(record);
+        if (record.value() == null || record.value().isBlank()) {
+            return Mono.error(new IllegalArgumentException("Empty AccountsRejected payload"));
+        }
+
+        return Mono.fromCallable(() -> objectMapper.readValue(record.value(), AccountsRejectedEvent.class))
+                .onErrorMap(JacksonException.class, error -> new IllegalArgumentException("Invalid AccountsRejected JSON", error))
+                .flatMap(payload -> {
+                    if (payload.transferId() == null || payload.reason() == null || payload.reason().isBlank()) {
+                        return Mono.error(new IllegalArgumentException("AccountsRejected payload must include transferId and reason"));
+                    }
+
+                    return transferService.processAccountsRejected(eventId, payload.transferId(), payload.reason());
+                });
+    }
+
+    private UUID eventId(ConsumerRecord<String, String> record) {
+        Header header = record.headers().lastHeader("eventId");
+        if (header == null) {
+            throw new IllegalArgumentException("Missing eventId header");
+        }
+        return UUID.fromString(new String(header.value(), StandardCharsets.UTF_8));
+    }
+
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record WalletEventPayload(UUID transferId, String reason) { }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record AccountsRejectedEvent(UUID transferId, String reason) { }
 }

@@ -26,18 +26,40 @@ public class TransferEventOutboxService {
     }
 
     public Mono<Void> saveCompleted(Transfer transfer) {
+        return saveTransferEvent(transfer, "TransferCompleted");
+    }
+
+    public Mono<Void> saveFailed(Transfer transfer, String reason) {
         try {
-            String payload = objectMapper.writeValueAsString(new TransferCompletedEvent(transfer.getId()));
+            String payload = objectMapper.writeValueAsString(new TransferFailedEvent(transfer.getId(), reason));
             OutboxMessage outboxMessage = OutboxMessage.builder()
                     .aggregateType("Transfer")
                     .aggregateId(transfer.getId().toString())
-                    .eventType("TransferCompleted")
+                    .eventType("TransferFailed")
                     .payload(Json.of(payload))
                     .createdAt(Instant.now())
                     .build();
             return outboxMessageRepository.save(outboxMessage).then();
         } catch (JacksonException error) {
-            return Mono.error(new IllegalStateException("Failed to serialize TransferCompleted event for transfer " + transfer.getId(), error));
+            return Mono.error(new IllegalStateException(
+                    "Failed to serialize TransferFailed event for transfer " + transfer.getId(), error));
+        }
+    }
+
+    private Mono<Void> saveTransferEvent(Transfer transfer, String eventType) {
+        try {
+            String payload = objectMapper.writeValueAsString(new TransferCompletedEvent(transfer.getId()));
+            OutboxMessage outboxMessage = OutboxMessage.builder()
+                    .aggregateType("Transfer")
+                    .aggregateId(transfer.getId().toString())
+                    .eventType(eventType)
+                    .payload(Json.of(payload))
+                    .createdAt(Instant.now())
+                    .build();
+
+            return outboxMessageRepository.save(outboxMessage).then();
+        } catch (JacksonException error) {
+            return Mono.error(new IllegalStateException("Failed to serialize " + eventType + " event for transfer " + transfer.getId(), error));
         }
     }
 
@@ -58,4 +80,6 @@ public class TransferEventOutboxService {
     }
 
     public record TransferCompletedEvent(UUID transferId) { }
+
+    public record TransferFailedEvent(UUID transferId, String reason) { }
 }

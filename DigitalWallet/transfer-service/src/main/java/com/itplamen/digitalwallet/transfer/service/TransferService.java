@@ -31,6 +31,7 @@ public class TransferService {
     private final TransactionalOperator transactionalOperator;
 
     private static final String WALLET_SETTLED_CONSUMER = "transfer-wallet-settled";
+    private static final String ACCOUNTS_REJECTED_CONSUMER = "transfer-accounts-rejected";
 
     public Mono<TransferInitiationResult> initiateTransfer(String idempotencyKey, TransferRequest request) {
         return transferIdempotencyService.execute(idempotencyKey, request, this::createTransfer);
@@ -96,6 +97,41 @@ public class TransferService {
                                                         "WalletTransferSettled",
                                                         now)
                                                 .then(transferEventOutboxService.saveCompleted(saved)));
+                            });
+                })
+                .as(transactionalOperator::transactional);
+    }
+
+    public Mono<Void> processAccountsRejected(UUID eventId, UUID transferId, String reason) {
+        return inboxMessageRepository.insert(eventId, ACCOUNTS_REJECTED_CONSUMER, Instant.now())
+                .flatMap(inserted -> {
+                    if (inserted == 0) {
+                        return Mono.empty();
+                    }
+
+                    return transferRepository.findById(transferId)
+                            .switchIfEmpty(Mono.error(new TransferNotFoundException(transferId)))
+                            .flatMap(transfer -> {
+                                if (transfer.getStatus() == TransferStatus.FAILED) {
+                                    return Mono.empty();
+                                }
+                                if (!isAllowedTransition(transfer.getStatus(), TransferStatus.FAILED)) {
+                                    return Mono.error(new InvalidTransferStatusTransitionException(transferId, transfer.getStatus(), TransferStatus.FAILED));
+                                }
+
+                                Instant now = Instant.now();
+                                TransferStatus previousStatus = transfer.getStatus();
+                                transfer.setStatus(TransferStatus.FAILED);
+                                transfer.setUpdatedAt(now);
+
+                                return transferRepository.save(transfer)
+                                        .flatMap(saved -> transferAuditService.recordStatusTransition(
+                                                        transferId,
+                                                        previousStatus,
+                                                        TransferStatus.FAILED,
+                                                        reason,
+                                                        now)
+                                                .then(transferEventOutboxService.saveFailed(saved, reason)));
                             });
                 })
                 .as(transactionalOperator::transactional);

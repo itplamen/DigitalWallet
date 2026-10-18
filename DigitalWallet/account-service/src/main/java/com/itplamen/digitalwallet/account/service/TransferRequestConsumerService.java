@@ -33,34 +33,46 @@ public class TransferRequestConsumerService {
                         return Mono.empty();
                     }
                     return validateActiveAccounts(event.sourceAccountId(), event.targetAccountId())
-                            .then(outboxMessageService.saveAccountsValidated(event));
+                            .flatMap(validation -> validation.valid()
+                                    ? outboxMessageService.saveAccountsValidated(event)
+                                    : outboxMessageService.saveAccountsRejected(new AccountsRejectedEvent(event.id(), validation.reason())));
                 })
                 .as(transactionalOperator::transactional);
     }
 
-    private Mono<Void> validateActiveAccounts(UUID sourceAccountId, UUID targetAccountId) {
+    private Mono<AccountValidation> validateActiveAccounts(UUID sourceAccountId, UUID targetAccountId) {
         if (sourceAccountId == null || targetAccountId == null) {
             return Mono.error(new IllegalArgumentException("Transfer source and target account IDs are required"));
         }
 
         return accountRepository.findByIds(sourceAccountId, targetAccountId)
                 .collectMap(Account::getId)
-                .flatMap(accounts -> validateAccount(accounts, sourceAccountId, "source")
-                        .then(validateAccount(accounts, targetAccountId, "target")));
+                .map(accounts -> {
+                    String sourceReason = accountRejectionReason(accounts.get(sourceAccountId), "SOURCE");
+                    if (sourceReason != null) {
+                        return new AccountValidation(false, sourceReason);
+                    }
+                    String targetReason = accountRejectionReason(accounts.get(targetAccountId), "TARGET");
+
+                    return targetReason == null
+                            ? new AccountValidation(true, null)
+                            : new AccountValidation(false, targetReason);
+                });
     }
 
-    private Mono<Void> validateAccount(Map<UUID, Account> accounts, UUID accountId, String role) {
-        Account account = accounts.get(accountId);
+    private String accountRejectionReason(Account account, String role) {
         if (account == null) {
-            return Mono.error(new IllegalStateException("Transfer " + role + " account does not exist: " + accountId));
+            return role + "_ACCOUNT_NOT_FOUND";
         }
 
-        if (account.getStatus() != AccountStatus.ACTIVE) {
-            return Mono.error(new IllegalStateException("Transfer " + role + " account is not active: " + accountId));
-        }
-
-        return Mono.empty();
+        return switch (account.getStatus()) {
+            case ACTIVE -> null;
+            case SUSPENDED -> role + "_ACCOUNT_SUSPENDED";
+            case CLOSED -> role + "_ACCOUNT_CLOSED";
+        };
     }
+
+    private record AccountValidation(boolean valid, String reason) { }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record TransferRequestedEvent(
@@ -68,6 +80,7 @@ public class TransferRequestConsumerService {
             UUID sourceAccountId,
             UUID targetAccountId,
             BigDecimal amount,
-            String currency) {
-    }
+            String currency) { }
+
+    public record AccountsRejectedEvent(UUID transferId, String reason) { }
 }
