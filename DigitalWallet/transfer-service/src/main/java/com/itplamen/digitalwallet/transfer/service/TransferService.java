@@ -31,6 +31,7 @@ public class TransferService {
     private final TransactionalOperator transactionalOperator;
 
     private static final String WALLET_SETTLED_CONSUMER = "transfer-wallet-settled";
+    private static final String WALLET_NOT_SETTLED_CONSUMER = "transfer-wallet-not-settled";
     private static final String ACCOUNTS_REJECTED_CONSUMER = "transfer-accounts-rejected";
 
     public Mono<TransferInitiationResult> initiateTransfer(String idempotencyKey, TransferRequest request) {
@@ -77,7 +78,15 @@ public class TransferService {
     }
 
     public Mono<Void> processAccountsRejected(UUID eventId, UUID transferId, String reason) {
-        return inboxMessageRepository.insert(eventId, ACCOUNTS_REJECTED_CONSUMER, Instant.now())
+        return processTransferFailed(eventId, transferId, reason, ACCOUNTS_REJECTED_CONSUMER);
+    }
+
+    public Mono<Void> processWalletTransferNotSettled(UUID eventId, UUID transferId, String reason) {
+        return processTransferFailed(eventId, transferId, reason, WALLET_NOT_SETTLED_CONSUMER);
+    }
+
+    private Mono<Void> processTransferFailed(UUID eventId, UUID transferId, String reason, String consumer) {
+        return inboxMessageRepository.insert(eventId, consumer, Instant.now())
                 .flatMap(inserted -> {
                     if (inserted == 0) {
                         return Mono.empty();

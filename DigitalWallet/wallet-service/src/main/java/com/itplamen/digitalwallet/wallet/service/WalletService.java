@@ -5,6 +5,7 @@ import com.itplamen.digitalwallet.wallet.entity.LedgerEntry;
 import com.itplamen.digitalwallet.wallet.entity.OutboxMessage;
 import com.itplamen.digitalwallet.wallet.entity.Reservation;
 import com.itplamen.digitalwallet.wallet.entity.ReservationStatus;
+import com.itplamen.digitalwallet.wallet.entity.Wallet;
 import com.itplamen.digitalwallet.wallet.repository.LedgerEntryRepository;
 import com.itplamen.digitalwallet.wallet.repository.InboxMessageRepository;
 import com.itplamen.digitalwallet.wallet.repository.OutboxMessageRepository;
@@ -23,7 +24,9 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -55,25 +58,43 @@ public class WalletService {
 
     private Mono<Void> settleTransfer(TransferEventPayload payload) {
         if (payload.sourceAccountId().equals(payload.targetAccountId())) {
-            return recordFailure(payload.id(), "SOURCE_AND_TARGET_ACCOUNTS_MUST_DIFFER");
+            return recordNotSettled(payload.id(), "SOURCE_AND_TARGET_ACCOUNTS_MUST_DIFFER");
         }
 
         String currency = normalizeCurrency(payload.currency());
-        return walletRepository.findByAccountIdAndCurrency(payload.sourceAccountId(), currency)
-                .switchIfEmpty(Mono.defer(() -> recordFailure(payload.id(), "SOURCE_WALLET_NOT_FOUND")
-                        .then(Mono.empty())))
-                .flatMap(sourceWallet -> walletRepository.findByAccountIdAndCurrency(payload.targetAccountId(), currency)
-                        .switchIfEmpty(Mono.defer(() -> createReservation(sourceWallet.getId(), payload)
-                                .flatMap(reservation -> releaseReservation(reservation, "TARGET_WALLET_NOT_FOUND"))
-                                .then(Mono.empty())))
-                        .flatMap(targetWallet -> {
-                            if (!currency.equals(sourceWallet.getCurrency()) || !currency.equals(targetWallet.getCurrency())) {
-                                return createReservation(sourceWallet.getId(), payload)
-                                        .flatMap(reservation -> releaseReservation(reservation, "CURRENCY_MISMATCH"));
-                            }
-                            return createReservation(sourceWallet.getId(), payload)
-                                    .flatMap(reservation -> postTransfer(payload, sourceWallet.getId(), targetWallet.getId(), reservation));
-                        }));
+        return walletRepository.findByTransferAccounts(payload.sourceAccountId(), payload.targetAccountId())
+                .collectList()
+                .flatMap(wallets -> {
+                    Map<UUID, List<Wallet>> walletsByAccount = wallets.stream().collect(Collectors.groupingBy(Wallet::getAccountId));
+
+                    Wallet sourceWallet = findWallet(walletsByAccount, payload.sourceAccountId(), currency);
+                    if (sourceWallet == null) {
+                        return recordNotSettled(payload.id(), walletRejectionReason(walletsByAccount, payload.sourceAccountId(), "SOURCE"));
+                    }
+
+                    Wallet targetWallet = findWallet(walletsByAccount, payload.targetAccountId(), currency);
+                    if (targetWallet == null) {
+                        return recordNotSettled(payload.id(), walletRejectionReason(walletsByAccount, payload.targetAccountId(), "TARGET"));
+                    }
+
+                    return postTransfer(payload, sourceWallet.getId(), targetWallet.getId());
+                });
+    }
+
+    private Wallet findWallet(Map<UUID, List<Wallet>> walletsByAccount, UUID accountId, String currency) {
+        return walletsByAccount.getOrDefault(accountId, List.of()).stream()
+                .filter(wallet -> currency.equals(wallet.getCurrency()))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private String walletRejectionReason(Map<UUID, List<Wallet>> walletsByAccount, UUID accountId, String role) {
+        List<Wallet> wallets = walletsByAccount.getOrDefault(accountId, List.of());
+        if (wallets.isEmpty()) {
+            return role + "_WALLET_NOT_FOUND";
+        }
+
+        return role + "_WALLET_CURRENCY_MISMATCH";
     }
 
     private Mono<Reservation> createReservation(UUID walletId, TransferEventPayload payload) {
@@ -92,24 +113,26 @@ public class WalletService {
     private Mono<Void> postTransfer(
             TransferEventPayload payload,
             UUID sourceWalletId,
-            UUID targetWalletId,
-            Reservation reservation) {
+            UUID targetWalletId) {
         Instant now = Instant.now();
         String currency = normalizeCurrency(payload.currency());
         return walletRepository.debitIfSufficientFunds(
                         sourceWalletId, currency, payload.amount(), now)
                 .flatMap(updatedRows -> {
                     if (updatedRows == 0) {
-                        return releaseReservation(reservation, "INSUFFICIENT_FUNDS");
+                        return recordNotSettled(payload.id(), "INSUFFICIENT_FUNDS");
                     }
-                    return walletRepository.credit(targetWalletId, currency, payload.amount(), now)
-                            .flatMap(creditedRows -> {
-                                if (creditedRows != 1) {
-                                    return Mono.error(new IllegalStateException(
-                                            "Target wallet changed during transfer settlement: " + targetWalletId));
-                                }
-                                return saveLedgerEntries(payload, sourceWalletId, targetWalletId, reservation, now);
-                            });
+                    return createReservation(sourceWalletId, payload)
+                            .flatMap(reservation -> walletRepository.credit(
+                                            targetWalletId, currency, payload.amount(), now)
+                                    .flatMap(creditedRows -> {
+                                        if (creditedRows != 1) {
+                                            return Mono.error(new IllegalStateException(
+                                                    "Target wallet changed during transfer settlement: " + targetWalletId));
+                                        }
+                                        return saveLedgerEntries(
+                                                payload, sourceWalletId, targetWalletId, reservation, now);
+                                    }));
                 });
     }
 
@@ -145,14 +168,9 @@ public class WalletService {
                 .build();
     }
 
-    private Mono<Void> recordFailure(UUID transferId, String reason) {
+    private Mono<Void> recordNotSettled(UUID transferId, String reason) {
         log.warn("Transfer {} failed in wallet settlement: {}", transferId, reason);
-        return recordResult(transferId, "FAILED", reason, "WALLET_TRANSFER_FAILED");
-    }
-
-    private Mono<Void> releaseReservation(Reservation reservation, String reason) {
-        return completeReservation(reservation, ReservationStatus.RELEASED)
-                .then(recordFailure(reservation.getPaymentId(), reason));
+        return recordResult(transferId, "NOT_SETTLED", reason, "WalletTransferNotSettled");
     }
 
     private Mono<Void> completeReservation(Reservation reservation, ReservationStatus status) {

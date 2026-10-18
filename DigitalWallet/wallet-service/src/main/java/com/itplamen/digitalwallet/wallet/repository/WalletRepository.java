@@ -7,6 +7,7 @@ import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Flux;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -15,7 +16,10 @@ import java.util.UUID;
 @Repository
 public interface WalletRepository extends ReactiveCrudRepository<Wallet, UUID> {
 
-    Mono<Wallet> findByAccountIdAndCurrency(UUID accountId, String currency);
+    @Query("SELECT * FROM wallets WHERE account_id IN (:sourceAccountId, :targetAccountId)")
+    Flux<Wallet> findByTransferAccounts(
+            @Param("sourceAccountId") UUID sourceAccountId,
+            @Param("targetAccountId") UUID targetAccountId);
 
     @Modifying
     @Query("""

@@ -25,7 +25,17 @@ public class TransferEventConsumer {
 
     @KafkaListener(topics = "wallet-events", groupId = "transfer-service-group")
     public Mono<Void> consumeWalletEvent(ConsumerRecord<String, String> record) {
-        return consumeEvent(record, "WalletTransferSettled");
+        return Mono.defer(() -> {
+            String eventType = eventType(record);
+            return switch (eventType) {
+                case "WalletTransferSettled" -> processWalletTransferSettled(record);
+                case "WalletTransferNotSettled" -> processWalletTransferNotSettled(record);
+                default -> {
+                    log.debug("Ignoring wallet event type: {}", eventType);
+                    yield Mono.empty();
+                }
+            };
+        }).doOnError(error -> log.error("Failed to process wallet event from topic [{}], partition [{}]", record.topic(), record.partition(), error));
     }
 
     @KafkaListener(topics = "account-events", groupId = "transfer-service-group")
@@ -41,21 +51,6 @@ public class TransferEventConsumer {
         }).doOnError(error -> log.error("Failed to process account event from topic [{}], partition [{}]", record.topic(), record.partition(), error));
     }
 
-    private Mono<Void> consumeEvent(ConsumerRecord<String, String> record, String expectedEventType) {
-        return Mono.defer(() -> {
-            String eventType = eventType(record);
-
-            log.info("Received event [type: {}], topic [{}], partition [{}]", eventType, record.topic(), record.partition());
-
-            if (!expectedEventType.equals(eventType)) {
-                log.debug("Ignoring event type: {}", eventType);
-                return Mono.empty();
-            }
-
-            return processWalletTransferSettled(record);
-        }).doOnError(error -> log.error("Failed to process event from topic [{}], partition [{}]", record.topic(), record.partition(), error));
-    }
-
     private String eventType(ConsumerRecord<String, String> record) {
         Header header = record.headers().lastHeader("eventType");
         if (header == null) {
@@ -66,15 +61,11 @@ public class TransferEventConsumer {
     }
 
     private Mono<Void> processWalletTransferSettled(ConsumerRecord<String, String> record) {
-        Header eventIdHeader = record.headers().lastHeader("eventId");
-        if (eventIdHeader == null) {
-            return Mono.error(new IllegalArgumentException("Missing eventId header"));
-        }
         if (record.value() == null || record.value().isBlank()) {
             return Mono.error(new IllegalArgumentException("Empty wallet event payload"));
         }
 
-        UUID eventId = UUID.fromString(new String(eventIdHeader.value(), StandardCharsets.UTF_8));
+        UUID eventId = eventId(record);
         return Mono.fromCallable(() -> objectMapper.readValue(record.value(), WalletEventPayload.class))
                 .onErrorMap(JacksonException.class,
                         error -> new IllegalArgumentException("Invalid wallet event JSON", error))
@@ -83,6 +74,23 @@ public class TransferEventConsumer {
                         return Mono.error(new IllegalArgumentException("Missing transfer ID in wallet event"));
                     }
                     return transferService.processWalletTransferSettled(eventId, payload.transferId());
+                });
+    }
+
+    private Mono<Void> processWalletTransferNotSettled(ConsumerRecord<String, String> record) {
+        if (record.value() == null || record.value().isBlank()) {
+            return Mono.error(new IllegalArgumentException("Empty WalletTransferNotSettled payload"));
+        }
+
+        UUID eventId = eventId(record);
+        return Mono.fromCallable(() -> objectMapper.readValue(record.value(), WalletEventPayload.class))
+                .onErrorMap(JacksonException.class, error -> new IllegalArgumentException("Invalid WalletTransferNotSettled JSON", error))
+                .flatMap(payload -> {
+                    if (payload.transferId() == null || payload.reason() == null || payload.reason().isBlank()) {
+                        return Mono.error(new IllegalArgumentException("WalletTransferNotSettled payload must include transferId and reason"));
+                    }
+
+                    return transferService.processWalletTransferNotSettled(eventId, payload.transferId(), payload.reason());
                 });
     }
 
