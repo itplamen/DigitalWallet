@@ -12,6 +12,7 @@ import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -31,23 +32,34 @@ public class TransferRequestConsumerService {
                     if (inserted == 0) {
                         return Mono.empty();
                     }
-                    return validateActiveAccount(event.sourceAccountId(), "source")
-                            .then(validateActiveAccount(event.targetAccountId(), "target"))
+                    return validateActiveAccounts(event.sourceAccountId(), event.targetAccountId())
                             .then(outboxMessageService.saveAccountsValidated(event));
                 })
                 .as(transactionalOperator::transactional);
     }
 
-    private Mono<Account> validateActiveAccount(UUID accountId, String role) {
-        if (accountId == null) {
-            return Mono.error(new IllegalArgumentException("Transfer " + role + " account ID is missing"));
+    private Mono<Void> validateActiveAccounts(UUID sourceAccountId, UUID targetAccountId) {
+        if (sourceAccountId == null || targetAccountId == null) {
+            return Mono.error(new IllegalArgumentException("Transfer source and target account IDs are required"));
         }
 
-        return accountRepository.findById(accountId)
-                .switchIfEmpty(Mono.error(new IllegalStateException("Transfer " + role + " account does not exist: " + accountId)))
-                .flatMap(account -> account.getStatus() == AccountStatus.ACTIVE
-                        ? Mono.just(account)
-                        : Mono.error(new IllegalStateException("Transfer " + role + " account is not active: " + accountId)));
+        return accountRepository.findByIds(sourceAccountId, targetAccountId)
+                .collectMap(Account::getId)
+                .flatMap(accounts -> validateAccount(accounts, sourceAccountId, "source")
+                        .then(validateAccount(accounts, targetAccountId, "target")));
+    }
+
+    private Mono<Void> validateAccount(Map<UUID, Account> accounts, UUID accountId, String role) {
+        Account account = accounts.get(accountId);
+        if (account == null) {
+            return Mono.error(new IllegalStateException("Transfer " + role + " account does not exist: " + accountId));
+        }
+
+        if (account.getStatus() != AccountStatus.ACTIVE) {
+            return Mono.error(new IllegalStateException("Transfer " + role + " account is not active: " + accountId));
+        }
+
+        return Mono.empty();
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
