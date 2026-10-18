@@ -26,7 +26,8 @@ public class OutboxPoller {
                                         "wallet-events",
                                         event.getAggregateId(),
                                         event.getPayload().asString(),
-                                        event.getEventType())
+                                        event.getEventType(),
+                                        event.getId().toString())
                                 .thenReturn(event)
                 )
                 .collectList()
@@ -38,6 +39,7 @@ public class OutboxPoller {
                                     "Successfully published and marked {} wallet outbox events as published",
                                     updatedCount));
                 })
+                .doOnError(error -> log.error("Failed to relay wallet outbox events", error))
                 .subscribe();
     }
 }

@@ -18,9 +18,11 @@ public class WalletEventProducer {
 
     private final KafkaTemplate<String, String> kafkaTemplate;
 
-    public Mono<SendResult<String, String>> publish(String topic, String key, String payload, String eventType) {
+    public Mono<SendResult<String, String>> publish(
+            String topic, String key, String payload, String eventType, String eventId) {
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, key, payload);
         record.headers().add(new RecordHeader("eventType", eventType.getBytes(StandardCharsets.UTF_8)));
+        record.headers().add(new RecordHeader("eventId", eventId.getBytes(StandardCharsets.UTF_8)));
         return Mono.fromFuture(kafkaTemplate.send(record))
                 .doOnSuccess(result -> log.debug("Successfully sent message to topic {} with key {}", topic, key))
                 .doOnError(ex -> log.error("Failed to send message to topic {}", topic, ex));

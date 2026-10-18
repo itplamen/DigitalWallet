@@ -73,7 +73,7 @@ public class TransferEventConsumer {
         return switch (eventType) {
             case "WALLET_DEBITED" -> Optional.of(TransferStatus.PENDING);
             case "WALLET_DEBIT_FAILED" -> Optional.of(TransferStatus.FAILED);
-            case "WALLET_TRANSFER_SETTLED" -> Optional.of(TransferStatus.COMPLETED);
+            case "WalletTransferSettled" -> Optional.of(TransferStatus.COMPLETED);
             case "WALLET_TRANSFER_FAILED" -> Optional.of(TransferStatus.FAILED);
             case "TRANSFER_COMPLETED" -> Optional.of(TransferStatus.COMPLETED);
             default -> Optional.empty();
