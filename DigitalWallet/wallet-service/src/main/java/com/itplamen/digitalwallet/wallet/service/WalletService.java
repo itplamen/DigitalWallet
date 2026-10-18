@@ -6,6 +6,7 @@ import com.itplamen.digitalwallet.wallet.entity.OutboxMessage;
 import com.itplamen.digitalwallet.wallet.entity.Reservation;
 import com.itplamen.digitalwallet.wallet.entity.ReservationStatus;
 import com.itplamen.digitalwallet.wallet.repository.LedgerEntryRepository;
+import com.itplamen.digitalwallet.wallet.repository.InboxMessageRepository;
 import com.itplamen.digitalwallet.wallet.repository.OutboxMessageRepository;
 import com.itplamen.digitalwallet.wallet.repository.ReservationRepository;
 import com.itplamen.digitalwallet.wallet.repository.WalletRepository;
@@ -32,18 +33,22 @@ public class WalletService {
     private final ObjectMapper objectMapper;
     private final WalletRepository walletRepository;
     private final LedgerEntryRepository ledgerEntryRepository;
+    private final InboxMessageRepository inboxMessageRepository;
     private final ReservationRepository reservationRepository;
     private final OutboxMessageRepository outboxRepository;
     private final TransactionalOperator transactionalOperator;
 
-    public Mono<Void> processTransfer(TransferEventPayload payload) {
+    public Mono<Void> processAccountsValidated(UUID eventId, TransferEventPayload payload) {
         return Mono.defer(() -> {
                     validate(payload);
-                    return reservationRepository.findByPaymentId(payload.id())
-                            .hasElement()
-                            .flatMap(alreadyProcessed -> alreadyProcessed
+                    return inboxMessageRepository.insert(eventId, "wallet-accounts-validated", Instant.now())
+                            .flatMap(inserted -> inserted == 0
                                     ? Mono.empty()
-                                    : settleTransfer(payload));
+                                    : reservationRepository.findByPaymentId(payload.id())
+                                            .hasElement()
+                                            .flatMap(alreadyProcessed -> alreadyProcessed
+                                                    ? Mono.empty()
+                                                    : settleTransfer(payload)));
                 })
                 .as(transactionalOperator::transactional);
     }
@@ -57,21 +62,17 @@ public class WalletService {
         return walletRepository.findByAccountIdAndCurrency(payload.sourceAccountId(), currency)
                 .switchIfEmpty(Mono.defer(() -> recordFailure(payload.id(), "SOURCE_WALLET_NOT_FOUND")
                         .then(Mono.empty())))
-                .flatMap(sourceWallet -> walletRepository.findByAccountIdAndCurrency(
-                                payload.targetAccountId(), currency)
+                .flatMap(sourceWallet -> walletRepository.findByAccountIdAndCurrency(payload.targetAccountId(), currency)
                         .switchIfEmpty(Mono.defer(() -> createReservation(sourceWallet.getId(), payload)
-                                .flatMap(reservation -> releaseReservation(
-                                        reservation, "TARGET_WALLET_NOT_FOUND"))
+                                .flatMap(reservation -> releaseReservation(reservation, "TARGET_WALLET_NOT_FOUND"))
                                 .then(Mono.empty())))
                         .flatMap(targetWallet -> {
-                            if (!currency.equals(sourceWallet.getCurrency())
-                                    || !currency.equals(targetWallet.getCurrency())) {
+                            if (!currency.equals(sourceWallet.getCurrency()) || !currency.equals(targetWallet.getCurrency())) {
                                 return createReservation(sourceWallet.getId(), payload)
                                         .flatMap(reservation -> releaseReservation(reservation, "CURRENCY_MISMATCH"));
                             }
                             return createReservation(sourceWallet.getId(), payload)
-                                    .flatMap(reservation -> postTransfer(
-                                            payload, sourceWallet.getId(), targetWallet.getId(), reservation));
+                                    .flatMap(reservation -> postTransfer(payload, sourceWallet.getId(), targetWallet.getId(), reservation));
                         }));
     }
 
@@ -124,7 +125,9 @@ public class WalletService {
 
         return ledgerEntryRepository.saveAll(entries)
                 .then(completeReservation(reservation, ReservationStatus.CAPTURED))
-                .then(recordResult(payload.id(), "COMPLETED", null, "WALLET_TRANSFER_SETTLED"));
+                .then(saveBalanceEvent(payload, sourceWalletId, "WalletDebited", now))
+                .then(saveBalanceEvent(payload, targetWalletId, "WalletCredited", now))
+                .then(recordResult(payload.id(), "COMPLETED", null, "WalletTransferSettled"));
     }
 
     private LedgerEntry buildLedgerEntry(
@@ -165,13 +168,20 @@ public class WalletService {
         return saveOutbox(transferId, eventType, new WalletTransferOutcome(transferId, status, reason), now);
     }
 
+    private Mono<Void> saveBalanceEvent(
+            TransferEventPayload payload, UUID walletId, String eventType, Instant createdAt) {
+        return saveOutbox(payload.id(), eventType,
+                new WalletBalanceEvent(payload.id(), walletId, payload.amount(), normalizeCurrency(payload.currency())),
+                createdAt);
+    }
+
     private Mono<Void> saveOutbox(
             UUID transferId,
             String eventType,
-            WalletTransferOutcome outcome,
+            Object eventPayload,
             Instant createdAt) {
         try {
-            String jsonPayload = objectMapper.writeValueAsString(outcome);
+            String jsonPayload = objectMapper.writeValueAsString(eventPayload);
             OutboxMessage outbox = OutboxMessage.builder()
                     .aggregateType("WALLET")
                     .aggregateId(transferId.toString())
@@ -215,8 +225,9 @@ public class WalletService {
             UUID sourceAccountId,
             UUID targetAccountId,
             BigDecimal amount,
-            String currency
-    ) {}
+            String currency) {}
 
     public record WalletTransferOutcome(UUID transferId, String status, String reason) {}
+
+    public record WalletBalanceEvent(UUID transferId, UUID walletId, BigDecimal amount, String currency) {}
 }
