@@ -13,9 +13,6 @@ import java.util.UUID;
 @Repository
 public interface AccountRepository extends R2dbcRepository<Account, UUID> {
 
-    @Query("SELECT * FROM accounts WHERE account_number = :accountNumber")
-    Mono<Account> findByAccountNumber(String accountNumber);
-
     @Query("SELECT * FROM accounts WHERE id IN (:sourceAccountId, :targetAccountId)")
     Flux<Account> findByIds(
             @Param("sourceAccountId") UUID sourceAccountId,

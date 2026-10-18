@@ -42,32 +42,6 @@ public class TransferService {
                 .switchIfEmpty(Mono.error(new TransferNotFoundException(transferId)));
     }
 
-    public Mono<Transfer> transitionStatus(UUID transferId, TransferStatus targetStatus, String reason) {
-        return transferRepository.findById(transferId)
-                .switchIfEmpty(Mono.error(new TransferNotFoundException(transferId)))
-                .flatMap(transfer -> {
-                    TransferStatus currentStatus = transfer.getStatus();
-                    if (currentStatus == targetStatus) {
-                        log.info("Transfer {} already has status {}", transferId, targetStatus);
-                        return Mono.empty();
-                    }
-                    if (!isAllowedTransition(currentStatus, targetStatus)) {
-                        return Mono.error(new InvalidTransferStatusTransitionException(
-                                transferId, currentStatus, targetStatus));
-                    }
-
-                    Instant now = Instant.now();
-                    transfer.setStatus(targetStatus);
-                    transfer.setUpdatedAt(now);
-                    return transferRepository.save(transfer)
-                            .flatMap(saved -> transferAuditService
-                                    .recordStatusTransition(
-                                            transferId, currentStatus, targetStatus, reason, now)
-                                    .thenReturn(saved));
-                })
-                .as(transactionalOperator::transactional);
-    }
-
     public Mono<Void> processWalletTransferSettled(UUID eventId, UUID transferId) {
         return inboxMessageRepository.insert(eventId, WALLET_SETTLED_CONSUMER, Instant.now())
                 .flatMap(inserted -> {

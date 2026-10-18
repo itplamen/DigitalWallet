@@ -44,11 +44,6 @@ public class AccountService {
                 .switchIfEmpty(Mono.error(new AccountNotFoundException(accountId)));
     }
 
-    public  Mono<Account> get(String accountNumber) {
-        return accountRepository.findByAccountNumber(accountNumber)
-                .switchIfEmpty(Mono.error(new AccountNotFoundException(accountNumber)));
-    }
-
     public Mono<Account> updateStatus(UUID accountId, AccountStatus requestedStatus) {
         return get(accountId)
                 .flatMap(account -> {
