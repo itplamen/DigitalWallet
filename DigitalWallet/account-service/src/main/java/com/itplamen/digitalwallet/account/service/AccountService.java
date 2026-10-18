@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
+import org.springframework.transaction.reactive.TransactionalOperator;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -21,6 +22,8 @@ import java.util.UUID;
 public class AccountService {
 
     private final AccountRepository accountRepository;
+    private final OutboxMessageService outboxMessageService;
+    private final TransactionalOperator transactionalOperator;
 
     public Mono<Account> create(String accountNumber, String customerName, String email) {
         Instant now = Instant.now();
@@ -35,6 +38,8 @@ public class AccountService {
                 .build();
 
         return accountRepository.save(account)
+                .flatMap(saved -> outboxMessageService.saveAccountCreated(saved).thenReturn(saved))
+                .as(transactionalOperator::transactional)
                 .onErrorMap(DuplicateKeyException.class,
                         error -> new AccountAlreadyExistsException(account.getAccountNumber(), error));
     }

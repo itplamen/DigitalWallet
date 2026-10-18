@@ -1,6 +1,7 @@
 package com.itplamen.digitalwallet.account.service;
 
 import com.itplamen.digitalwallet.account.entity.OutboxMessage;
+import com.itplamen.digitalwallet.account.entity.Account;
 import com.itplamen.digitalwallet.account.repository.OutboxMessageRepository;
 import io.r2dbc.postgresql.codec.Json;
 import lombok.RequiredArgsConstructor;
@@ -27,11 +28,23 @@ public class OutboxMessageService {
         return saveEvent(event.transferId(), "AccountsRejected", event);
     }
 
+    public Mono<Void> saveAccountCreated(Account account) {
+        return saveEvent(
+                account.getId(),
+                "AccountCreated",
+                new AccountCreatedEvent(account.getId(), account.getEmail(), account.getCustomerName()),
+                "Account");
+    }
+
     private Mono<Void> saveEvent(UUID transferId, String eventType, Object payload) {
+        return saveEvent(transferId, eventType, payload, "Transfer");
+    }
+
+    private Mono<Void> saveEvent(UUID aggregateId, String eventType, Object payload, String aggregateType) {
         try {
             OutboxMessage message = OutboxMessage.builder()
-                    .aggregateType("Transfer")
-                    .aggregateId(transferId.toString())
+                    .aggregateType(aggregateType)
+                    .aggregateId(aggregateId.toString())
                     .eventType(eventType)
                     .payload(Json.of(objectMapper.writeValueAsString(payload)))
                     .createdAt(Instant.now())
@@ -39,7 +52,10 @@ public class OutboxMessageService {
 
             return outboxMessageRepository.save(message).then();
         } catch (JacksonException error) {
-            return Mono.error(new IllegalStateException("Failed to serialize " + eventType + " event for transfer " + transferId, error));
+            return Mono.error(new IllegalStateException(
+                    "Failed to serialize " + eventType + " event for aggregate " + aggregateId, error));
         }
     }
+
+    public record AccountCreatedEvent(UUID accountId, String email, String name) { }
 }

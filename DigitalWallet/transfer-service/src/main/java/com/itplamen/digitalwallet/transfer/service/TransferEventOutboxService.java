@@ -31,7 +31,13 @@ public class TransferEventOutboxService {
 
     public Mono<Void> saveFailed(Transfer transfer, String reason) {
         try {
-            String payload = objectMapper.writeValueAsString(new TransferFailedEvent(transfer.getId(), reason));
+            String payload = objectMapper.writeValueAsString(new TransferFailedEvent(
+                    transfer.getId(),
+                    transfer.getSourceAccountId(),
+                    transfer.getTargetAccountId(),
+                    transfer.getAmount(),
+                    transfer.getCurrency(),
+                    reason));
             OutboxMessage outboxMessage = OutboxMessage.builder()
                     .aggregateType("Transfer")
                     .aggregateId(transfer.getId().toString())
@@ -48,7 +54,12 @@ public class TransferEventOutboxService {
 
     private Mono<Void> saveTransferEvent(Transfer transfer, String eventType) {
         try {
-            String payload = objectMapper.writeValueAsString(new TransferCompletedEvent(transfer.getId()));
+            String payload = objectMapper.writeValueAsString(new TransferCompletedEvent(
+                    transfer.getId(),
+                    transfer.getSourceAccountId(),
+                    transfer.getTargetAccountId(),
+                    transfer.getAmount(),
+                    transfer.getCurrency()));
             OutboxMessage outboxMessage = OutboxMessage.builder()
                     .aggregateType("Transfer")
                     .aggregateId(transfer.getId().toString())
@@ -79,7 +90,18 @@ public class TransferEventOutboxService {
         }
     }
 
-    public record TransferCompletedEvent(UUID transferId) { }
+    public record TransferCompletedEvent(
+            UUID transferId,
+            UUID sourceAccountId,
+            UUID targetAccountId,
+            java.math.BigDecimal amount,
+            String currency) { }
 
-    public record TransferFailedEvent(UUID transferId, String reason) { }
+    public record TransferFailedEvent(
+            UUID transferId,
+            UUID sourceAccountId,
+            UUID targetAccountId,
+            java.math.BigDecimal amount,
+            String currency,
+            String reason) { }
 }
