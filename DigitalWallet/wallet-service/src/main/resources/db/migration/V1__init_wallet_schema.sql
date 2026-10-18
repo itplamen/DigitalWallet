@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS wallets (
     CONSTRAINT chk_wallets_currency_format CHECK (currency ~ '^[A-Z]{3}$')
 );
 
-CREATE TABLE wallet_events (
+CREATE TABLE IF NOT EXISTS wallet_events (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     wallet_id UUID NOT NULL REFERENCES wallets(id) ON DELETE RESTRICT,
     event_id UUID NOT NULL UNIQUE,
@@ -40,7 +40,7 @@ CREATE TABLE ledger_entries (
 
 CREATE INDEX idx_ledger_entries_wallet_created ON ledger_entries (wallet_id, created_at, id);
 
-CREATE TABLE reservations (
+CREATE TABLE IF NOT EXISTS reservations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     wallet_id UUID NOT NULL REFERENCES wallets(id) ON DELETE RESTRICT,
     payment_id UUID NOT NULL UNIQUE,

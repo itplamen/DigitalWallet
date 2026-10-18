@@ -1,4 +1,4 @@
-CREATE TABLE accounts (
+CREATE TABLE IF NOT EXISTS accounts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     account_number VARCHAR(50) UNIQUE NOT NULL,
     customer_name VARCHAR(255),

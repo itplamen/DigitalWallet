@@ -1,11 +1,11 @@
-CREATE TABLE recipients (
+CREATE TABLE IF NOT EXISTS recipients (
     account_id UUID PRIMARY KEY,
     email VARCHAR(255),
     name VARCHAR(255),
     updated_at TIMESTAMPTZ
 );
 
-CREATE TABLE notifications (
+CREATE TABLE IF NOT EXISTS notifications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     account_id UUID NOT NULL,
     channel VARCHAR(20) NOT NULL,
