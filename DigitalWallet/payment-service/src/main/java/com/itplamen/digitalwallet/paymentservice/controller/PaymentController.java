@@ -2,7 +2,7 @@ package com.itplamen.digitalwallet.paymentservice.controller;
 
 import com.itplamen.digitalwallet.paymentservice.dto.WithdrawalInitiationResult;
 import com.itplamen.digitalwallet.paymentservice.dto.WithdrawalRequest;
-import com.itplamen.digitalwallet.paymentservice.entity.Payment;
+import com.itplamen.digitalwallet.paymentservice.dto.WithdrawalResponse;
 import com.itplamen.digitalwallet.paymentservice.service.PaymentService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -26,10 +26,10 @@ public class PaymentController {
     private final PaymentService paymentService;
 
     @PostMapping
-    public Mono<ResponseEntity<Payment>> createWithdrawal(
+    public Mono<ResponseEntity<WithdrawalResponse>> createWithdrawal(
             @RequestHeader("Idempotency-Key") @NotBlank @Size(max = 255) String idempotencyKey,
             @Valid @RequestBody WithdrawalRequest request) {
         return paymentService.createWithdrawal(idempotencyKey, request)
-                .map(result -> ResponseEntity.status(result.responseStatus()).body(result.payment()));
+                .map(result -> ResponseEntity.status(result.responseStatus()).body(result.response()));
     }
 }

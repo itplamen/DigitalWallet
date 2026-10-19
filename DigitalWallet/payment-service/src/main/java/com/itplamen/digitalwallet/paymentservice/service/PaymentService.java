@@ -2,6 +2,7 @@ package com.itplamen.digitalwallet.paymentservice.service;
 
 import com.itplamen.digitalwallet.paymentservice.dto.WithdrawalInitiationResult;
 import com.itplamen.digitalwallet.paymentservice.dto.WithdrawalRequest;
+import com.itplamen.digitalwallet.paymentservice.dto.WithdrawalResponse;
 import com.itplamen.digitalwallet.paymentservice.entity.IdempotencyKey;
 import com.itplamen.digitalwallet.paymentservice.entity.Payment;
 import com.itplamen.digitalwallet.paymentservice.entity.PaymentStatus;
@@ -70,10 +71,10 @@ public class PaymentService {
             return Mono.error(new IdempotencyConflictException("A withdrawal request with this idempotency key is still in progress"));
         }
 
-        return Mono.fromCallable(() -> objectMapper.readValue(key.getResponseBody().asString(), Payment.class))
+        return Mono.fromCallable(() -> objectMapper.readValue(key.getResponseBody().asString(), WithdrawalResponse.class))
                 .onErrorMap(JacksonException.class,
                         error -> new IllegalStateException("Failed to read stored idempotent withdrawal response", error))
-                .map(payment -> new WithdrawalInitiationResult(payment, key.getResponseStatus()));
+                .map(response -> new WithdrawalInitiationResult(response, key.getResponseStatus()));
     }
 
     private Mono<WithdrawalInitiationResult> createIdempotentWithdrawal(
@@ -82,8 +83,10 @@ public class PaymentService {
             WithdrawalRequest request) {
         Instant now = Instant.now();
         return paymentRepository.save(buildWithdrawal(request, now))
-                .flatMap(payment -> paymentEventOutboxService.saveWithdrawalRequested(payment)
-                        .then(Mono.fromCallable(() -> Json.of(objectMapper.writeValueAsString(payment)))
+                .flatMap(payment -> {
+                    WithdrawalResponse response = new WithdrawalResponse(payment.getId(), payment.getStatus());
+                    return paymentEventOutboxService.saveWithdrawalRequested(payment)
+                        .then(Mono.fromCallable(() -> Json.of(objectMapper.writeValueAsString(response)))
                                 .flatMap(responseBody -> idempotencyKeyRepository.create(
                                         idempotencyKey,
                                         requestHash,
@@ -93,8 +96,9 @@ public class PaymentService {
                                         now,
                                         now.plus(24, ChronoUnit.HOURS)))
                                 .flatMap(inserted -> inserted == 1
-                                        ? Mono.just(new WithdrawalInitiationResult(payment, 201))
-                                        : Mono.error(new IllegalStateException("Could not create withdrawal idempotency record")))))
+                                        ? Mono.just(new WithdrawalInitiationResult(response, 201))
+                                        : Mono.error(new IllegalStateException("Could not create withdrawal idempotency record"))));
+                })
                 .onErrorMap(JacksonException.class,
                         error -> new IllegalStateException("Failed to serialize withdrawal response", error));
     }
