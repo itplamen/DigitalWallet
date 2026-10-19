@@ -6,4 +6,4 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record WithdrawalRequestedEvent(UUID id, UUID accountId, BigDecimal amount) { }
+public record WithdrawalRequestedEvent(UUID id, UUID accountId, BigDecimal amount, String currency) { }

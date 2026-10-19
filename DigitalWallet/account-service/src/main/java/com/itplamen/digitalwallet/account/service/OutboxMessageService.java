@@ -13,6 +13,7 @@ import reactor.core.publisher.Mono;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -35,7 +36,8 @@ public class OutboxMessageService {
         return saveEvent(
                 event.id(),
                 "WithdrawalAccountValidated",
-                new WithdrawalAccountValidatedEvent(event.id(), event.accountId(), event.amount()));
+                new WithdrawalAccountValidatedEvent(
+                        event.accountId(), event.amount(), event.currency(), event.id()));
     }
 
     public Mono<Void> saveAccountCreated(Account account) {
@@ -69,5 +71,9 @@ public class OutboxMessageService {
 
     public record AccountCreatedEvent(UUID accountId, String email, String name) { }
 
-    public record WithdrawalAccountValidatedEvent(UUID withdrawalId, UUID accountId, java.math.BigDecimal amount) { }
+    public record WithdrawalAccountValidatedEvent(
+            UUID accountId,
+            BigDecimal amount,
+            String currency,
+            UUID paymentId) { }
 }
