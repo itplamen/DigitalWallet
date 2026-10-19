@@ -1,5 +1,6 @@
 package com.itplamen.digitalwallet.account.consumer;
 
+import com.itplamen.digitalwallet.account.event.TransferRequestedEvent;
 import com.itplamen.digitalwallet.account.service.TransferRequestConsumerService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,7 +40,7 @@ public class TransferRequestedConsumer {
             }
 
             return Mono.fromCallable(() ->
-                            objectMapper.readValue(record.value(), TransferRequestConsumerService.TransferRequestedEvent.class))
+                            objectMapper.readValue(record.value(), TransferRequestedEvent.class))
                     .onErrorMap(JacksonException.class,
                             error -> new IllegalArgumentException("Invalid TransferRequested JSON", error))
                     .flatMap(event -> {

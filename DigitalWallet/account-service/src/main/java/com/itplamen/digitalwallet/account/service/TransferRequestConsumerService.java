@@ -5,6 +5,7 @@ import com.itplamen.digitalwallet.account.entity.Account;
 import com.itplamen.digitalwallet.account.entity.AccountStatus;
 import com.itplamen.digitalwallet.account.repository.AccountRepository;
 import com.itplamen.digitalwallet.account.repository.InboxMessageRepository;
+import com.itplamen.digitalwallet.account.event.TransferRequestedEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.reactive.TransactionalOperator;
@@ -75,14 +76,6 @@ public class TransferRequestConsumerService {
     }
 
     private record AccountValidation(boolean valid, String reason) { }
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record TransferRequestedEvent(
-            UUID id,
-            UUID sourceAccountId,
-            UUID targetAccountId,
-            BigDecimal amount,
-            String currency) { }
 
     public record AccountsRejectedEvent(UUID transferId, String reason) { }
 }

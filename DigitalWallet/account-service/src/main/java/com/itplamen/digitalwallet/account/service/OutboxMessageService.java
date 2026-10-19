@@ -2,6 +2,8 @@ package com.itplamen.digitalwallet.account.service;
 
 import com.itplamen.digitalwallet.account.entity.OutboxMessage;
 import com.itplamen.digitalwallet.account.entity.Account;
+import com.itplamen.digitalwallet.account.event.TransferRequestedEvent;
+import com.itplamen.digitalwallet.account.event.WithdrawalRequestedEvent;
 import com.itplamen.digitalwallet.account.repository.OutboxMessageRepository;
 import io.r2dbc.postgresql.codec.Json;
 import lombok.RequiredArgsConstructor;
@@ -20,7 +22,7 @@ public class OutboxMessageService {
     private final ObjectMapper objectMapper;
     private final OutboxMessageRepository outboxMessageRepository;
 
-    public Mono<Void> saveAccountsValidated(TransferRequestConsumerService.TransferRequestedEvent event) {
+    public Mono<Void> saveAccountsValidated(TransferRequestedEvent event) {
         return saveEvent(event.id(), "AccountsValidated", event);
     }
 
@@ -28,7 +30,7 @@ public class OutboxMessageService {
         return saveEvent(event.transferId(), "AccountsRejected", event);
     }
 
-    public Mono<Void> saveWithdrawalAccountValidated(WithdrawalRequestConsumerService.WithdrawalRequestedEvent event) {
+    public Mono<Void> saveWithdrawalAccountValidated(WithdrawalRequestedEvent event) {
         return saveEvent(
                 event.id(),
                 "WithdrawalAccountValidated",

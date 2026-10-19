@@ -1,5 +1,6 @@
 package com.itplamen.digitalwallet.account.consumer;
 
+import com.itplamen.digitalwallet.account.event.WithdrawalRequestedEvent;
 import com.itplamen.digitalwallet.account.service.WithdrawalRequestConsumerService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,7 +39,7 @@ public class WithdrawalRequestedConsumer {
                 return Mono.error(new IllegalArgumentException("Empty WithdrawalRequested payload"));
             }
 
-            return Mono.fromCallable(() -> objectMapper.readValue(record.value(), WithdrawalRequestConsumerService.WithdrawalRequestedEvent.class))
+            return Mono.fromCallable(() -> objectMapper.readValue(record.value(), WithdrawalRequestedEvent.class))
                     .onErrorMap(JacksonException.class,
                             error -> new IllegalArgumentException("Invalid WithdrawalRequested JSON", error))
                     .flatMap(event -> {

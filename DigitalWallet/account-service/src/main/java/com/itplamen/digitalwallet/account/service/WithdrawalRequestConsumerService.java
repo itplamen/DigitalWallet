@@ -5,6 +5,7 @@ import com.itplamen.digitalwallet.account.entity.Account;
 import com.itplamen.digitalwallet.account.entity.AccountStatus;
 import com.itplamen.digitalwallet.account.repository.AccountRepository;
 import com.itplamen.digitalwallet.account.repository.InboxMessageRepository;
+import com.itplamen.digitalwallet.account.event.WithdrawalRequestedEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.reactive.TransactionalOperator;
@@ -59,7 +60,4 @@ public class WithdrawalRequestConsumerService {
                 && account.getTransferLimit() != null
                 && amount.compareTo(account.getTransferLimit()) <= 0;
     }
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record WithdrawalRequestedEvent(UUID id, UUID accountId, BigDecimal amount) { }
 }
