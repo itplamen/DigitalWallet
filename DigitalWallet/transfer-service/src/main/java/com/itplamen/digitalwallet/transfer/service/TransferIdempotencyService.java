@@ -2,6 +2,7 @@ package com.itplamen.digitalwallet.transfer.service;
 
 import com.itplamen.digitalwallet.transfer.dto.TransferInitiationResult;
 import com.itplamen.digitalwallet.transfer.dto.TransferRequest;
+import com.itplamen.digitalwallet.transfer.dto.TransferResponse;
 import com.itplamen.digitalwallet.transfer.entity.IdempotencyKey;
 import com.itplamen.digitalwallet.transfer.entity.Transfer;
 import com.itplamen.digitalwallet.transfer.exception.IdempotencyConflictException;
@@ -69,10 +70,10 @@ public class TransferIdempotencyService {
             return Mono.error(new IdempotencyConflictException("A transfer request with this idempotency key is still in progress"));
         }
 
-        return Mono.fromCallable(() -> objectMapper.readValue(key.getResponseBody().asString(), Transfer.class))
+        return Mono.fromCallable(() -> objectMapper.readValue(key.getResponseBody().asString(), TransferResponse.class))
                 .onErrorMap(JacksonException.class,
                         error -> new IllegalStateException("Failed to read stored idempotent response", error))
-                .map(transfer -> new TransferInitiationResult(transfer, key.getResponseStatus()));
+                .map(response -> new TransferInitiationResult(response, key.getResponseStatus()));
     }
 
     private Mono<TransferInitiationResult> createIdempotentTransfer(
@@ -82,7 +83,9 @@ public class TransferIdempotencyService {
             Function<TransferRequest, Mono<Transfer>> transferOperation) {
         Instant now = Instant.now();
         return transferOperation.apply(request)
-                .flatMap(transfer -> Mono.fromCallable(() -> Json.of(objectMapper.writeValueAsString(transfer)))
+                .flatMap(transfer -> {
+                    TransferResponse response = new TransferResponse(transfer.getId(), transfer.getStatus());
+                    return Mono.fromCallable(() -> Json.of(objectMapper.writeValueAsString(response)))
                         .flatMap(responseBody -> idempotencyKeyRepository.create(
                                         idempotencyKey,
                                         requestHash,
@@ -92,8 +95,9 @@ public class TransferIdempotencyService {
                                         now,
                                         now.plus(24, ChronoUnit.HOURS))
                                 .flatMap(inserted -> inserted == 1
-                                        ? Mono.just(new TransferInitiationResult(transfer, 201))
-                                        : Mono.error(new IllegalStateException("Could not create idempotency record")))))
+                                        ? Mono.just(new TransferInitiationResult(response, 201))
+                                        : Mono.error(new IllegalStateException("Could not create idempotency record"))));
+                })
                 .onErrorMap(JacksonException.class,
                         error -> new IllegalStateException("Failed to serialize transfer response", error));
     }
