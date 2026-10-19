@@ -28,6 +28,13 @@ public class OutboxMessageService {
         return saveEvent(event.transferId(), "AccountsRejected", event);
     }
 
+    public Mono<Void> saveWithdrawalAccountValidated(WithdrawalRequestConsumerService.WithdrawalRequestedEvent event) {
+        return saveEvent(
+                event.id(),
+                "WithdrawalAccountValidated",
+                new WithdrawalAccountValidatedEvent(event.id(), event.accountId(), event.amount()));
+    }
+
     public Mono<Void> saveAccountCreated(Account account) {
         return saveEvent(
                 account.getId(),
@@ -58,4 +65,6 @@ public class OutboxMessageService {
     }
 
     public record AccountCreatedEvent(UUID accountId, String email, String name) { }
+
+    public record WithdrawalAccountValidatedEvent(UUID withdrawalId, UUID accountId, java.math.BigDecimal amount) { }
 }
