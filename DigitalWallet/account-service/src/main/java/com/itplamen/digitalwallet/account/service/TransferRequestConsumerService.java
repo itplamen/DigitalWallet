@@ -66,7 +66,9 @@ public class TransferRequestConsumerService {
         }
 
         return switch (account.getStatus()) {
-            case ACTIVE -> null;
+            case ACTIVE -> Boolean.TRUE.equals(account.getKycChecked())
+                    ? null
+                    : role + "_KYC_NOT_CHECKED";
             case SUSPENDED -> role + "_ACCOUNT_SUSPENDED";
             case CLOSED -> role + "_ACCOUNT_CLOSED";
         };
