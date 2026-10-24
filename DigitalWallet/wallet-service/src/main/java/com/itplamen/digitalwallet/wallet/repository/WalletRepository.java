@@ -26,6 +26,14 @@ public interface WalletRepository extends ReactiveCrudRepository<Wallet, UUID> {
             @Param("sourceAccountId") UUID sourceAccountId,
             @Param("targetAccountId") UUID targetAccountId);
 
+    @Query("""
+            SELECT * FROM wallets
+            WHERE account_id = :accountId
+            ORDER BY id
+            FOR UPDATE
+            """)
+    Flux<Wallet> findByAccountId(@Param("accountId") UUID accountId);
+
     @Modifying
     @Query("""
             UPDATE wallets

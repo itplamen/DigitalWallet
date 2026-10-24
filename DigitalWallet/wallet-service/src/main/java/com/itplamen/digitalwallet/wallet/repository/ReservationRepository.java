@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Mono;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -16,6 +17,18 @@ import java.util.UUID;
 public interface ReservationRepository extends ReactiveCrudRepository<Reservation, UUID> {
 
     Mono<Reservation> findByPaymentId(UUID paymentId);
+
+    @Modifying
+    @Query("""
+            INSERT INTO reservations(id, wallet_id, payment_id, amount, status, created_at)
+            VALUES(:id, :walletId, :paymentId, :amount, 'ACTIVE', :createdAt)
+            """)
+    Mono<Integer> insertActive(
+            @Param("id") UUID id,
+            @Param("walletId") UUID walletId,
+            @Param("paymentId") UUID paymentId,
+            @Param("amount") BigDecimal amount,
+            @Param("createdAt") Instant createdAt);
 
     @Modifying
     @Query("""
