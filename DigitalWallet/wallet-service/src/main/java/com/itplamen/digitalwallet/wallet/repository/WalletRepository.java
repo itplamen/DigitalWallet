@@ -34,6 +34,9 @@ public interface WalletRepository extends ReactiveCrudRepository<Wallet, UUID> {
             """)
     Flux<Wallet> findByAccountId(@Param("accountId") UUID accountId);
 
+    @Query("SELECT * FROM wallets WHERE id = :walletId FOR UPDATE")
+    Mono<Wallet> getById(@Param("walletId") UUID walletId);
+
     @Modifying
     @Query("""
             UPDATE wallets

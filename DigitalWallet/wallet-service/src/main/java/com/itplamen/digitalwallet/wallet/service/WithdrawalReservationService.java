@@ -1,40 +1,32 @@
 package com.itplamen.digitalwallet.wallet.service;
 
-import com.itplamen.digitalwallet.wallet.entity.OutboxMessage;
 import com.itplamen.digitalwallet.wallet.entity.Wallet;
 import com.itplamen.digitalwallet.wallet.event.FundsReservedEvent;
 import com.itplamen.digitalwallet.wallet.event.WithdrawalAccountValidatedEvent;
 import com.itplamen.digitalwallet.wallet.repository.InboxMessageRepository;
-import com.itplamen.digitalwallet.wallet.repository.OutboxMessageRepository;
 import com.itplamen.digitalwallet.wallet.repository.ReservationRepository;
 import com.itplamen.digitalwallet.wallet.repository.WalletRepository;
-import io.r2dbc.postgresql.codec.Json;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Mono;
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.UUID;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class WithdrawalReservationService {
 
     private static final String CONSUMER = "wallet-withdrawal-account-validated";
 
-    private final ObjectMapper objectMapper;
     private final WalletRepository walletRepository;
     private final WalletEventStore walletEventStore;
+    private final WalletOutboxService walletOutboxService;
     private final InboxMessageRepository inboxMessageRepository;
     private final ReservationRepository reservationRepository;
-    private final OutboxMessageRepository outboxRepository;
     private final TransactionalOperator transactionalOperator;
 
     public Mono<Void> reserveFunds(UUID eventId, WithdrawalAccountValidatedEvent payload) {
@@ -69,24 +61,7 @@ public class WithdrawalReservationService {
         return walletEventStore.apply(wallet, "FundsReserved", event, payload.amount().negate(), now)
                 .then(reservationRepository.insertActive(
                         UUID.randomUUID(), wallet.getId(), payload.paymentId(), payload.amount(), now))
-                .then(saveOutbox(payload.paymentId(), "FundsReserved", event, now));
-    }
-
-    private Mono<Void> saveOutbox(UUID paymentId, String eventType, Object eventPayload, Instant createdAt) {
-        try {
-            OutboxMessage outbox = OutboxMessage.builder()
-                    .aggregateType("WALLET")
-                    .aggregateId(paymentId.toString())
-                    .eventType(eventType)
-                    .payload(Json.of(objectMapper.writeValueAsString(eventPayload)))
-                    .createdAt(createdAt)
-                    .build();
-
-            return outboxRepository.save(outbox).then();
-        } catch (JacksonException e) {
-            log.error("Failed to serialize outbox payload for payment ID: {}", paymentId, e);
-            return Mono.error(e);
-        }
+                .then(walletOutboxService.save(payload.paymentId(), "FundsReserved", event, now));
     }
 
     private void validate(WithdrawalAccountValidatedEvent payload) {
