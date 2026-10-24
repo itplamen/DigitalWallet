@@ -2,6 +2,7 @@ package com.itplamen.digitalwallet.paymentservice.service;
 
 import com.itplamen.digitalwallet.paymentservice.entity.OutboxMessage;
 import com.itplamen.digitalwallet.paymentservice.entity.Payment;
+import com.itplamen.digitalwallet.paymentservice.event.PayoutFailedEvent;
 import com.itplamen.digitalwallet.paymentservice.event.PayoutSucceededEvent;
 import com.itplamen.digitalwallet.paymentservice.event.WithdrawalCompletedEvent;
 import com.itplamen.digitalwallet.paymentservice.repository.OutboxMessageRepository;
@@ -28,6 +29,11 @@ public class PaymentEventOutboxService {
     public Mono<Void> savePayoutSucceeded(Payment payment) {
         return save(payment, "PayoutSucceeded", new PayoutSucceededEvent(
                 payment.getId(), payment.getAccountId(), payment.getAmount(), payment.getCurrency()));
+    }
+
+    public Mono<Void> savePayoutFailed(Payment payment, String reason) {
+        return save(payment, "PayoutFailed", new PayoutFailedEvent(
+                payment.getId(), payment.getAccountId(), payment.getAmount(), payment.getCurrency(), reason));
     }
 
     public Mono<Void> saveWithdrawalCompleted(Payment payment) {
