@@ -25,6 +25,7 @@ import java.util.UUID;
 public class NotificationDeliveryService {
 
     private static final String TRANSFER_CONSUMER = "notification-transfer-events";
+    private static final String PAYMENT_CONSUMER = "notification-payment-events";
     private static final String ACCOUNT_CONSUMER = "notification-account-events";
 
     private final InboxMessageRepository inboxMessageRepository;
@@ -65,28 +66,73 @@ public class NotificationDeliveryService {
                         return Mono.empty();
                     }
 
-                    NotificationEvent notificationEvent = new NotificationEvent(eventId, transferId, status, reason, amount, currency);
+                    NotificationEvent notificationEvent = new NotificationEvent(eventId, transferId, null, status, reason, amount, currency);
+                    NotificationContent content = transferContent(notificationEvent);
 
                     return Flux.fromIterable(List.of(sourceAccountId, targetAccountId).stream().distinct().toList())
-                            .concatMap(accountId -> deliverToAccount(accountId, notificationEvent, reason))
+                            .concatMap(accountId -> deliverToAccount(accountId, notificationEvent, content))
                             .then();
                 })
                 .as(transactionalOperator::transactional);
     }
 
-    private Mono<Void> deliverToAccount(UUID accountId, NotificationEvent event, String reason) {
+    public Mono<Void> processWithdrawalCompleted(
+            UUID eventId,
+            UUID paymentId,
+            UUID accountId,
+            BigDecimal amount,
+            String currency) {
+        if (paymentId == null || accountId == null) {
+            return Mono.error(new IllegalArgumentException("WithdrawalCompleted payload must contain payment and account IDs"));
+        }
+
+        return inboxMessageRepository.insert(eventId, PAYMENT_CONSUMER, Instant.now())
+                .flatMap(inserted -> {
+                    if (inserted == 0) {
+                        return Mono.empty();
+                    }
+
+                    NotificationEvent notificationEvent = new NotificationEvent(eventId, null, paymentId, "COMPLETED", null, amount, currency);
+
+                    return deliverToAccount(accountId, notificationEvent, withdrawalContent(notificationEvent));
+                })
+                .as(transactionalOperator::transactional);
+    }
+
+    private NotificationContent transferContent(NotificationEvent event) {
+        String status = event.status().toLowerCase(Locale.ROOT);
+        String failureReason = event.reason() == null || event.reason().isBlank() ? "" : "\nReason: " + event.reason();
+
+        return new NotificationContent(
+                "TRANSFER_" + event.status(),
+                "Digital Wallet transfer " + status,
+                "Transfer " + event.transferId() + " is " + status + "." + amountLine(event) + failureReason);
+    }
+
+    private NotificationContent withdrawalContent(NotificationEvent event) {
+        return new NotificationContent(
+                "WITHDRAWAL_COMPLETED",
+                "Digital Wallet withdrawal completed",
+                "Withdrawal " + event.paymentId() + " is completed." + amountLine(event));
+    }
+
+    private String amountLine(NotificationEvent event) {
+        return event.amount() == null ? "" : "\nAmount: " + event.amount() + " " + event.currency();
+    }
+
+    private Mono<Void> deliverToAccount(UUID accountId, NotificationEvent event, NotificationContent content) {
         Instant now = Instant.now();
         return recipientRepository.findById(accountId)
                 .defaultIfEmpty(Recipient.builder().accountId(accountId).build())
                 .flatMap(recipient -> recipientRepository.upsert(accountId, recipient.getEmail(), recipient.getName(), now)
-                        .then(deliverEmail(accountId, recipient, event, reason, now))
-                        .then(deliverSse(accountId, event, now)));
+                        .then(deliverEmail(accountId, recipient, event, content, now))
+                        .then(deliverSse(accountId, event, content, now)));
     }
 
-    private Mono<Void> deliverEmail(UUID accountId, Recipient recipient, NotificationEvent event, String reason, Instant createdAt) {
-        String template = "TRANSFER_" + event.status();
-        String subject = "Digital Wallet transfer " + event.status().toLowerCase(Locale.ROOT);
-        String body = emailBody(recipient, event, reason);
+    private Mono<Void> deliverEmail(UUID accountId, Recipient recipient, NotificationEvent event, NotificationContent content, Instant createdAt) {
+        String template = content.template();
+        String subject = content.subject();
+        String body = emailBody(recipient, content.details());
 
         Mono<NotificationRecord> result;
         if (recipient.getEmail() == null || recipient.getEmail().isBlank()) {
@@ -109,12 +155,12 @@ public class NotificationDeliveryService {
         return result.flatMap(notificationRepository::save).then();
     }
 
-    private Mono<Void> deliverSse(UUID accountId, NotificationEvent event, Instant createdAt) {
+    private Mono<Void> deliverSse(UUID accountId, NotificationEvent event, NotificationContent content, Instant createdAt) {
         boolean emitted = sseNotificationHub.emit(accountId, event);
         NotificationRecord record = notification(
                 accountId,
                 "SSE",
-                "TRANSFER_" + event.status(),
+                content.template(),
                 event.eventId(),
                 emitted ? "SENT" : "FAILED",
                 emitted ? null : "No active SSE connection for recipient",
@@ -146,16 +192,12 @@ public class NotificationDeliveryService {
                 .build();
     }
 
-    private String emailBody(Recipient recipient, NotificationEvent event, String reason) {
+    private String emailBody(Recipient recipient, String details) {
         String greeting = recipient.getName() == null || recipient.getName().isBlank()
                 ? "Hello,"
                 : "Hello " + recipient.getName() + ",";
-        String transferDetails = "Transfer " + event.transferId() + " is "
-                + event.status().toLowerCase(Locale.ROOT) + ".";
-        String amount = event.amount() == null ? "" : "\nAmount: " + event.amount() + " " + event.currency();
-        String failureReason = reason == null || reason.isBlank() ? "" : "\nReason: " + reason;
 
-        return greeting + "\n\n" + transferDetails + amount + failureReason;
+        return greeting + "\n\n" + details;
     }
 
     private String errorMessage(Throwable error) {
@@ -166,6 +208,8 @@ public class NotificationDeliveryService {
 
         return message.length() <= 255 ? message : message.substring(0, 255);
     }
+
+    private record NotificationContent(String template, String subject, String details) { }
 
     public record AccountCreatedEvent(UUID accountId, String email, String name) { }
 }

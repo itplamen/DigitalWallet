@@ -6,6 +6,7 @@ import java.util.UUID;
 public record NotificationEvent(
         UUID eventId,
         UUID transferId,
+        UUID paymentId,
         String status,
         String reason,
         BigDecimal amount,
