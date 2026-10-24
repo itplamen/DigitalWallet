@@ -33,7 +33,7 @@ public class FundsReservedConsumerService {
                 .flatMap(payment -> {
                     payment.setStatus(PaymentStatus.FUNDS_RESERVED);
                     payment.setUpdatedAt(Instant.now());
-                    
+
                     return paymentRepository.save(payment);
                 });
     }
