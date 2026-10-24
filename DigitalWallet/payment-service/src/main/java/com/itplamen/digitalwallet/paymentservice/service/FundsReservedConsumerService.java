@@ -21,16 +21,10 @@ public class FundsReservedConsumerService {
     private final InboxMessageProcessor inboxMessageProcessor;
     private final PaymentRepository paymentRepository;
     private final BankMockPayoutClient bankMockPayoutClient;
-    private final PaymentEventOutboxService paymentEventOutboxService;
 
     public Mono<Void> handle(UUID eventId, FundsReservedEvent event) {
         return inboxMessageProcessor.process(eventId, CONSUMER, () -> markFundsReserved(event.paymentId()))
-                .flatMap(this::requestPayout);
-    }
-
-    private Mono<Void> requestPayout(Payment payment) {
-        return bankMockPayoutClient.requestPayout(payment)
-                .then(Mono.defer(() -> paymentEventOutboxService.savePayoutSucceeded(payment)));
+                .flatMap(bankMockPayoutClient::requestPayout);
     }
 
     private Mono<Payment> markFundsReserved(UUID paymentId) {

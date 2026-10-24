@@ -153,6 +153,7 @@ services:
       SPRING_FLYWAY_PASSWORD: ${PAYMENT_DB_PASSWORD:?Set PAYMENT_DB_PASSWORD in .env}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       BANK_MOCK_BASE_URL: http://bank-mock-service:8086
+      PAYMENT_WEBHOOK_SECRET: ${PAYMENT_WEBHOOK_SECRET:-local-webhook-secret}
     ports:
       - "8083:8083"
     healthcheck:
@@ -230,6 +231,8 @@ services:
       dockerfile: bank-mock-service/Dockerfile
     environment:
       SERVER_PORT: 8086
+      PAYMENT_SERVICE_BASE_URL: http://payment-service:8083
+      PAYMENT_WEBHOOK_SECRET: ${PAYMENT_WEBHOOK_SECRET:-local-webhook-secret}
     ports:
       - "8086:8086"
     healthcheck:
