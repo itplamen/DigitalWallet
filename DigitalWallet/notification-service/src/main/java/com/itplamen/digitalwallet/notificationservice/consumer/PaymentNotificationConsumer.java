@@ -22,6 +22,7 @@ import java.util.UUID;
 public class PaymentNotificationConsumer {
 
     private static final String WITHDRAWAL_COMPLETED = "WithdrawalCompleted";
+    private static final String WITHDRAWAL_FAILED = "WithdrawalFailed";
 
     private final ObjectMapper objectMapper;
     private final NotificationDeliveryService notificationDeliveryService;
@@ -30,20 +31,26 @@ public class PaymentNotificationConsumer {
     public Mono<Void> consumePaymentEvent(ConsumerRecord<String, String> record) {
         return Mono.defer(() -> {
             String eventType = headerValue(record, "eventType");
-            if (!WITHDRAWAL_COMPLETED.equals(eventType)) {
+            if (!WITHDRAWAL_COMPLETED.equals(eventType) && !WITHDRAWAL_FAILED.equals(eventType)) {
                 return Mono.empty();
             }
 
             UUID eventId = UUID.fromString(headerValue(record, "eventId"));
             if (record.value() == null || record.value().isBlank()) {
-                return Mono.error(new IllegalArgumentException("Empty WithdrawalCompleted payload"));
+                return Mono.error(new IllegalArgumentException("Empty " + eventType + " payload"));
             }
 
-            return Mono.fromCallable(() -> objectMapper.readValue(record.value(), WithdrawalCompletedEvent.class))
+            return Mono.fromCallable(() -> objectMapper.readValue(record.value(), WithdrawalEvent.class))
                     .onErrorMap(JacksonException.class,
-                            error -> new IllegalArgumentException("Invalid WithdrawalCompleted JSON", error))
-                    .flatMap(event -> notificationDeliveryService.processWithdrawalCompleted(
-                            eventId, event.paymentId(), event.accountId(), event.amount(), event.currency()));
+                            error -> new IllegalArgumentException("Invalid " + eventType + " JSON", error))
+                    .flatMap(event -> notificationDeliveryService.processWithdrawal(
+                            eventId,
+                            event.paymentId(),
+                            event.accountId(),
+                            WITHDRAWAL_COMPLETED.equals(eventType) ? "COMPLETED" : "FAILED",
+                            event.reason(),
+                            event.amount(),
+                            event.currency()));
         }).doOnError(error -> log.error(
                 "Failed to process payment notification event from topic [{}], partition [{}]",
                 record.topic(), record.partition(), error));
@@ -59,5 +66,5 @@ public class PaymentNotificationConsumer {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record WithdrawalCompletedEvent(UUID paymentId, UUID accountId, BigDecimal amount, String currency) { }
+    public record WithdrawalEvent(UUID paymentId, UUID accountId, BigDecimal amount, String currency, String reason) { }
 }

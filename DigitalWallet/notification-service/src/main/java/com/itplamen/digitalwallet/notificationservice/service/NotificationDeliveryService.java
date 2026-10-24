@@ -76,14 +76,16 @@ public class NotificationDeliveryService {
                 .as(transactionalOperator::transactional);
     }
 
-    public Mono<Void> processWithdrawalCompleted(
+    public Mono<Void> processWithdrawal(
             UUID eventId,
             UUID paymentId,
             UUID accountId,
+            String status,
+            String reason,
             BigDecimal amount,
             String currency) {
         if (paymentId == null || accountId == null) {
-            return Mono.error(new IllegalArgumentException("WithdrawalCompleted payload must contain payment and account IDs"));
+            return Mono.error(new IllegalArgumentException("Withdrawal notification payload must contain payment and account IDs"));
         }
 
         return inboxMessageRepository.insert(eventId, PAYMENT_CONSUMER, Instant.now())
@@ -92,7 +94,7 @@ public class NotificationDeliveryService {
                         return Mono.empty();
                     }
 
-                    NotificationEvent notificationEvent = new NotificationEvent(eventId, null, paymentId, "COMPLETED", null, amount, currency);
+                    NotificationEvent notificationEvent = new NotificationEvent(eventId, null, paymentId, status, reason, amount, currency);
 
                     return deliverToAccount(accountId, notificationEvent, withdrawalContent(notificationEvent));
                 })
@@ -101,19 +103,24 @@ public class NotificationDeliveryService {
 
     private NotificationContent transferContent(NotificationEvent event) {
         String status = event.status().toLowerCase(Locale.ROOT);
-        String failureReason = event.reason() == null || event.reason().isBlank() ? "" : "\nReason: " + event.reason();
 
         return new NotificationContent(
                 "TRANSFER_" + event.status(),
                 "Digital Wallet transfer " + status,
-                "Transfer " + event.transferId() + " is " + status + "." + amountLine(event) + failureReason);
+                "Transfer " + event.transferId() + " is " + status + "." + amountLine(event) + reasonLine(event));
     }
 
     private NotificationContent withdrawalContent(NotificationEvent event) {
+        String status = event.status().toLowerCase(Locale.ROOT);
+
         return new NotificationContent(
-                "WITHDRAWAL_COMPLETED",
-                "Digital Wallet withdrawal completed",
-                "Withdrawal " + event.paymentId() + " is completed." + amountLine(event));
+                "WITHDRAWAL_" + event.status(),
+                "Digital Wallet withdrawal " + status,
+                "Withdrawal " + event.paymentId() + " is " + status + "." + amountLine(event) + reasonLine(event));
+    }
+
+    private String reasonLine(NotificationEvent event) {
+        return event.reason() == null || event.reason().isBlank() ? "" : "\nReason: " + event.reason();
     }
 
     private String amountLine(NotificationEvent event) {
