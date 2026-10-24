@@ -2,6 +2,7 @@ package com.itplamen.digitalwallet.paymentservice.service;
 
 import com.itplamen.digitalwallet.paymentservice.entity.OutboxMessage;
 import com.itplamen.digitalwallet.paymentservice.entity.Payment;
+import com.itplamen.digitalwallet.paymentservice.event.PayoutSucceededEvent;
 import com.itplamen.digitalwallet.paymentservice.repository.OutboxMessageRepository;
 import io.r2dbc.postgresql.codec.Json;
 import lombok.RequiredArgsConstructor;
@@ -20,18 +21,27 @@ public class PaymentEventOutboxService {
     private final OutboxMessageRepository outboxMessageRepository;
 
     public Mono<Void> saveWithdrawalRequested(Payment payment) {
+        return save(payment, "WithdrawalRequested", payment);
+    }
+
+    public Mono<Void> savePayoutSucceeded(Payment payment) {
+        return save(payment, "PayoutSucceeded", new PayoutSucceededEvent(
+                payment.getId(), payment.getAccountId(), payment.getAmount(), payment.getCurrency()));
+    }
+
+    private Mono<Void> save(Payment payment, String eventType, Object event) {
         try {
             OutboxMessage message = OutboxMessage.builder()
                     .aggregateType("Payment")
                     .aggregateId(payment.getId().toString())
-                    .eventType("WithdrawalRequested")
-                    .payload(Json.of(objectMapper.writeValueAsString(payment)))
+                    .eventType(eventType)
+                    .payload(Json.of(objectMapper.writeValueAsString(event)))
                     .createdAt(Instant.now())
                     .build();
 
             return outboxMessageRepository.save(message).then();
         } catch (JacksonException error) {
-            return Mono.error(new IllegalStateException("Failed to serialize WithdrawalRequested event for payment " + payment.getId(), error));
+            return Mono.error(new IllegalStateException("Failed to serialize " + eventType + " event for payment " + payment.getId(), error));
         }
     }
 }
