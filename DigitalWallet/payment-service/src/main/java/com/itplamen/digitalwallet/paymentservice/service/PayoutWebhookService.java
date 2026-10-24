@@ -26,24 +26,25 @@ public class PayoutWebhookService {
 
     public Mono<Void> handlePayoutSucceeded(PayoutSucceededWebhookRequest request) {
         return inboxMessageProcessor.process(request.payoutId(), SUCCEEDED_CONSUMER,
-                () -> recordPayout(request.paymentId(), request.payoutId(), paymentEventOutboxService::savePayoutSucceeded));
+                () -> recordPayout(request.paymentId(), request.payoutId(), null, paymentEventOutboxService::savePayoutSucceeded));
     }
 
     public Mono<Void> handlePayoutFailed(PayoutFailedWebhookRequest request) {
         return inboxMessageProcessor.process(request.payoutId(), FAILED_CONSUMER,
-                () -> recordPayout(request.paymentId(), request.payoutId(),
+                () -> recordPayout(request.paymentId(), request.payoutId(), request.reason(),
                         payment -> paymentEventOutboxService.savePayoutFailed(payment, request.reason())));
     }
 
-    private Mono<Void> recordPayout(UUID paymentId, UUID payoutId, Function<Payment, Mono<Void>> saveOutboxEvent) {
+    private Mono<Void> recordPayout(UUID paymentId, UUID payoutId, String reason, Function<Payment, Mono<Void>> saveOutboxEvent) {
         return paymentRepository.findById(paymentId)
                 .filter(payment -> payment.getStatus() == PaymentStatus.FUNDS_RESERVED)
-                .flatMap(payment -> storeBankReference(payment, payoutId))
+                .flatMap(payment -> storeBankResult(payment, payoutId, reason))
                 .flatMap(saveOutboxEvent);
     }
 
-    private Mono<Payment> storeBankReference(Payment payment, UUID payoutId) {
+    private Mono<Payment> storeBankResult(Payment payment, UUID payoutId, String reason) {
         payment.setExternalReference(payoutId.toString());
+        payment.setReason(reason);
         payment.setUpdatedAt(Instant.now());
 
         return paymentRepository.save(payment);

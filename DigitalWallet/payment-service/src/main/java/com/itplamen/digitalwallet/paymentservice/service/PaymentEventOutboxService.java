@@ -5,6 +5,7 @@ import com.itplamen.digitalwallet.paymentservice.entity.Payment;
 import com.itplamen.digitalwallet.paymentservice.event.PayoutFailedEvent;
 import com.itplamen.digitalwallet.paymentservice.event.PayoutSucceededEvent;
 import com.itplamen.digitalwallet.paymentservice.event.WithdrawalCompletedEvent;
+import com.itplamen.digitalwallet.paymentservice.event.WithdrawalFailedEvent;
 import com.itplamen.digitalwallet.paymentservice.repository.OutboxMessageRepository;
 import io.r2dbc.postgresql.codec.Json;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +40,11 @@ public class PaymentEventOutboxService {
     public Mono<Void> saveWithdrawalCompleted(Payment payment) {
         return save(payment, "WithdrawalCompleted", new WithdrawalCompletedEvent(
                 payment.getId(), payment.getAccountId(), payment.getAmount(), payment.getCurrency()));
+    }
+
+    public Mono<Void> saveWithdrawalFailed(Payment payment) {
+        return save(payment, "WithdrawalFailed", new WithdrawalFailedEvent(
+                payment.getId(), payment.getAccountId(), payment.getAmount(), payment.getCurrency(), payment.getReason()));
     }
 
     private Mono<Void> save(Payment payment, String eventType, Object event) {
