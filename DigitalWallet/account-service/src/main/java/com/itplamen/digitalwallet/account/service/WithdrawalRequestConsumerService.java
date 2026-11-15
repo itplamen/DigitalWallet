@@ -1,5 +1,6 @@
 package com.itplamen.digitalwallet.account.service;
 
+import com.itplamen.digitalwallet.account.event.PaymentAccountRejectedEvent;
 import com.itplamen.digitalwallet.account.event.WithdrawalRequestedEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -22,6 +23,7 @@ public class WithdrawalRequestConsumerService {
                 accountEligibilityValidator.validateWithdrawalAccount(event.accountId(), event.amount())
                         .flatMap(validation -> validation.valid()
                                 ? outboxMessageService.saveWithdrawalAccountValidated(event)
-                                : Mono.empty()));
+                                : outboxMessageService.savePaymentAccountRejected(
+                                        new PaymentAccountRejectedEvent(event.id(), validation.reason()))));
     }
 }
