@@ -1,5 +1,6 @@
 package com.itplamen.digitalwallet.bankmockservice.client;
 
+import com.itplamen.digitalwallet.bankmockservice.dto.ChargeSucceededWebhook;
 import com.itplamen.digitalwallet.bankmockservice.dto.PayoutFailedWebhook;
 import com.itplamen.digitalwallet.bankmockservice.dto.PayoutSucceededWebhook;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,6 +21,10 @@ public class PaymentWebhookClient {
     public PaymentWebhookClient(WebClient paymentWebhookWebClient, @Value("${bank-mock.webhook.secret}") String secret) {
         this.paymentWebhookWebClient = paymentWebhookWebClient;
         this.secret = secret;
+    }
+
+    public Mono<Void> notifyChargeSucceeded(UUID chargeId, UUID paymentId) {
+        return post("/webhooks/charges/succeeded", new ChargeSucceededWebhook(chargeId, paymentId));
     }
 
     public Mono<Void> notifyPayoutSucceeded(UUID payoutId, UUID paymentId) {

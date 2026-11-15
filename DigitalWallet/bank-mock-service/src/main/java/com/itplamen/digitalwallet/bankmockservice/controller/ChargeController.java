@@ -22,6 +22,6 @@ public class ChargeController {
     @ResponseStatus(HttpStatus.ACCEPTED)
     public ChargeResponse requestCharge(@RequestHeader("Idempotency-Key") String idempotencyKey,
                                         @Valid @RequestBody ChargeRequest request) {
-        return chargeService.accept(idempotencyKey);
+        return chargeService.accept(idempotencyKey, request);
     }
 }
