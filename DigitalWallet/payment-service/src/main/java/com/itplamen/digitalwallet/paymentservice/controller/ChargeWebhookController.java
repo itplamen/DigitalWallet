@@ -1,5 +1,6 @@
 package com.itplamen.digitalwallet.paymentservice.controller;
 
+import com.itplamen.digitalwallet.paymentservice.dto.ChargeFailedWebhookRequest;
 import com.itplamen.digitalwallet.paymentservice.dto.ChargeSucceededWebhookRequest;
 import com.itplamen.digitalwallet.paymentservice.service.ChargeWebhookService;
 import com.itplamen.digitalwallet.paymentservice.service.WebhookSecretVerifier;
@@ -28,5 +29,13 @@ public class ChargeWebhookController {
             @Valid @RequestBody ChargeSucceededWebhookRequest request) {
         return Mono.fromRunnable(() -> webhookSecretVerifier.verify(secret))
                 .then(Mono.defer(() -> chargeWebhookService.handleChargeSucceeded(request)));
+    }
+
+    @PostMapping("/failed")
+    public Mono<Void> chargeFailed(
+            @RequestHeader(value = WEBHOOK_SECRET_HEADER, required = false) String secret,
+            @Valid @RequestBody ChargeFailedWebhookRequest request) {
+        return Mono.fromRunnable(() -> webhookSecretVerifier.verify(secret))
+                .then(Mono.defer(() -> chargeWebhookService.handleChargeFailed(request)));
     }
 }

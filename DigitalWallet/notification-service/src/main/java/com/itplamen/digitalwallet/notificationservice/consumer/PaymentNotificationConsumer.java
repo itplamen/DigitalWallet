@@ -14,6 +14,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.UUID;
 
 @Slf4j
@@ -21,8 +22,11 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class PaymentNotificationConsumer {
 
-    private static final String WITHDRAWAL_COMPLETED = "WithdrawalCompleted";
-    private static final String WITHDRAWAL_FAILED = "WithdrawalFailed";
+    private static final Map<String, PaymentOutcome> OUTCOMES = Map.of(
+            "WithdrawalCompleted", new PaymentOutcome("WITHDRAWAL", "COMPLETED"),
+            "WithdrawalFailed", new PaymentOutcome("WITHDRAWAL", "FAILED"),
+            "DepositCompleted", new PaymentOutcome("DEPOSIT", "COMPLETED"),
+            "DepositFailed", new PaymentOutcome("DEPOSIT", "FAILED"));
 
     private final ObjectMapper objectMapper;
     private final NotificationDeliveryService notificationDeliveryService;
@@ -31,7 +35,8 @@ public class PaymentNotificationConsumer {
     public Mono<Void> consumePaymentEvent(ConsumerRecord<String, String> record) {
         return Mono.defer(() -> {
             String eventType = headerValue(record, "eventType");
-            if (!WITHDRAWAL_COMPLETED.equals(eventType) && !WITHDRAWAL_FAILED.equals(eventType)) {
+            PaymentOutcome outcome = OUTCOMES.get(eventType);
+            if (outcome == null) {
                 return Mono.empty();
             }
 
@@ -40,14 +45,15 @@ public class PaymentNotificationConsumer {
                 return Mono.error(new IllegalArgumentException("Empty " + eventType + " payload"));
             }
 
-            return Mono.fromCallable(() -> objectMapper.readValue(record.value(), WithdrawalEvent.class))
+            return Mono.fromCallable(() -> objectMapper.readValue(record.value(), PaymentEvent.class))
                     .onErrorMap(JacksonException.class,
                             error -> new IllegalArgumentException("Invalid " + eventType + " JSON", error))
-                    .flatMap(event -> notificationDeliveryService.processWithdrawal(
+                    .flatMap(event -> notificationDeliveryService.processPayment(
                             eventId,
+                            outcome.kind(),
                             event.paymentId(),
                             event.accountId(),
-                            WITHDRAWAL_COMPLETED.equals(eventType) ? "COMPLETED" : "FAILED",
+                            outcome.status(),
                             event.reason(),
                             event.amount(),
                             event.currency()));
@@ -65,6 +71,8 @@ public class PaymentNotificationConsumer {
         return new String(header.value(), StandardCharsets.UTF_8);
     }
 
+    private record PaymentOutcome(String kind, String status) { }
+
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record WithdrawalEvent(UUID paymentId, UUID accountId, BigDecimal amount, String currency, String reason) { }
+    public record PaymentEvent(UUID paymentId, UUID accountId, BigDecimal amount, String currency, String reason) { }
 }

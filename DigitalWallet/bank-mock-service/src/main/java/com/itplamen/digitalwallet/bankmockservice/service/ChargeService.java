@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -17,15 +18,20 @@ import java.util.concurrent.ConcurrentMap;
 @Service
 public class ChargeService {
 
+    private static final String AMOUNT_LIMIT_EXCEEDED = "AMOUNT_LIMIT_EXCEEDED";
+
     private final ConcurrentMap<String, UUID> chargeIdsByIdempotencyKey = new ConcurrentHashMap<>();
     private final PaymentWebhookClient paymentWebhookClient;
     private final Duration webhookDelay;
+    private final BigDecimal maxAmount;
 
     public ChargeService(
             PaymentWebhookClient paymentWebhookClient,
-            @Value("${bank-mock.webhook.delay}") Duration webhookDelay) {
+            @Value("${bank-mock.webhook.delay}") Duration webhookDelay,
+            @Value("${bank-mock.charge.max-amount}") BigDecimal maxAmount) {
         this.paymentWebhookClient = paymentWebhookClient;
         this.webhookDelay = webhookDelay;
+        this.maxAmount = maxAmount;
     }
 
     public ChargeResponse accept(String idempotencyKey, ChargeRequest request) {
@@ -40,8 +46,12 @@ public class ChargeService {
     }
 
     private void scheduleWebhook(UUID chargeId, ChargeRequest request) {
+        Mono<Void> webhook = request.amount().compareTo(maxAmount) > 0
+                ? paymentWebhookClient.notifyChargeFailed(chargeId, request.paymentId(), AMOUNT_LIMIT_EXCEEDED)
+                : paymentWebhookClient.notifyChargeSucceeded(chargeId, request.paymentId());
+
         Mono.delay(webhookDelay)
-                .then(paymentWebhookClient.notifyChargeSucceeded(chargeId, request.paymentId()))
+                .then(webhook)
                 .doOnError(error -> log.error("Failed to notify charge {} result for payment {}", chargeId, request.paymentId(), error))
                 .onErrorComplete()
                 .subscribe();

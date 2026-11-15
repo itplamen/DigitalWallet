@@ -1,5 +1,6 @@
 package com.itplamen.digitalwallet.bankmockservice.client;
 
+import com.itplamen.digitalwallet.bankmockservice.dto.ChargeFailedWebhook;
 import com.itplamen.digitalwallet.bankmockservice.dto.ChargeSucceededWebhook;
 import com.itplamen.digitalwallet.bankmockservice.dto.PayoutFailedWebhook;
 import com.itplamen.digitalwallet.bankmockservice.dto.PayoutSucceededWebhook;
@@ -25,6 +26,10 @@ public class PaymentWebhookClient {
 
     public Mono<Void> notifyChargeSucceeded(UUID chargeId, UUID paymentId) {
         return post("/webhooks/charges/succeeded", new ChargeSucceededWebhook(chargeId, paymentId));
+    }
+
+    public Mono<Void> notifyChargeFailed(UUID chargeId, UUID paymentId, String reason) {
+        return post("/webhooks/charges/failed", new ChargeFailedWebhook(chargeId, paymentId, reason));
     }
 
     public Mono<Void> notifyPayoutSucceeded(UUID payoutId, UUID paymentId) {

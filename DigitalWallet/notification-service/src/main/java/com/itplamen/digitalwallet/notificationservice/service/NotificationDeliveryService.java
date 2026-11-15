@@ -76,8 +76,9 @@ public class NotificationDeliveryService {
                 .as(transactionalOperator::transactional);
     }
 
-    public Mono<Void> processWithdrawal(
+    public Mono<Void> processPayment(
             UUID eventId,
+            String kind,
             UUID paymentId,
             UUID accountId,
             String status,
@@ -85,7 +86,7 @@ public class NotificationDeliveryService {
             BigDecimal amount,
             String currency) {
         if (paymentId == null || accountId == null) {
-            return Mono.error(new IllegalArgumentException("Withdrawal notification payload must contain payment and account IDs"));
+            return Mono.error(new IllegalArgumentException("Payment notification payload must contain payment and account IDs"));
         }
 
         return inboxMessageRepository.insert(eventId, PAYMENT_CONSUMER, Instant.now())
@@ -96,7 +97,7 @@ public class NotificationDeliveryService {
 
                     NotificationEvent notificationEvent = new NotificationEvent(eventId, null, paymentId, status, reason, amount, currency);
 
-                    return deliverToAccount(accountId, notificationEvent, withdrawalContent(notificationEvent));
+                    return deliverToAccount(accountId, notificationEvent, paymentContent(kind, notificationEvent));
                 })
                 .as(transactionalOperator::transactional);
     }
@@ -110,13 +111,18 @@ public class NotificationDeliveryService {
                 "Transfer " + event.transferId() + " is " + status + "." + amountLine(event) + reasonLine(event));
     }
 
-    private NotificationContent withdrawalContent(NotificationEvent event) {
+    private NotificationContent paymentContent(String kind, NotificationEvent event) {
         String status = event.status().toLowerCase(Locale.ROOT);
+        String label = kind.toLowerCase(Locale.ROOT);
 
         return new NotificationContent(
-                "WITHDRAWAL_" + event.status(),
-                "Digital Wallet withdrawal " + status,
-                "Withdrawal " + event.paymentId() + " is " + status + "." + amountLine(event) + reasonLine(event));
+                kind + "_" + event.status(),
+                "Digital Wallet " + label + " " + status,
+                capitalize(label) + " " + event.paymentId() + " is " + status + "." + amountLine(event) + reasonLine(event));
+    }
+
+    private String capitalize(String text) {
+        return Character.toUpperCase(text.charAt(0)) + text.substring(1);
     }
 
     private String reasonLine(NotificationEvent event) {

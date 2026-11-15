@@ -1,5 +1,6 @@
 package com.itplamen.digitalwallet.paymentservice.service;
 
+import com.itplamen.digitalwallet.paymentservice.dto.ChargeFailedWebhookRequest;
 import com.itplamen.digitalwallet.paymentservice.dto.ChargeSucceededWebhookRequest;
 import com.itplamen.digitalwallet.paymentservice.entity.Payment;
 import com.itplamen.digitalwallet.paymentservice.entity.PaymentStatus;
@@ -10,12 +11,14 @@ import reactor.core.publisher.Mono;
 
 import java.time.Instant;
 import java.util.UUID;
+import java.util.function.Function;
 
 @Service
 @RequiredArgsConstructor
 public class ChargeWebhookService {
 
     private static final String SUCCEEDED_CONSUMER = "payment-charge-succeeded-webhook";
+    private static final String FAILED_CONSUMER = "payment-charge-failed-webhook";
 
     private final InboxMessageProcessor inboxMessageProcessor;
     private final PaymentRepository paymentRepository;
@@ -23,19 +26,32 @@ public class ChargeWebhookService {
 
     public Mono<Void> handleChargeSucceeded(ChargeSucceededWebhookRequest request) {
         return inboxMessageProcessor.process(request.chargeId(), SUCCEEDED_CONSUMER,
-                () -> markCharged(request.paymentId(), request.chargeId()));
+                () -> recordCharge(request.paymentId(), request.chargeId(), PaymentStatus.CHARGED, null,
+                        paymentEventOutboxService::saveDepositConfirmed));
     }
 
-    private Mono<Void> markCharged(UUID paymentId, UUID chargeId) {
+    public Mono<Void> handleChargeFailed(ChargeFailedWebhookRequest request) {
+        return inboxMessageProcessor.process(request.chargeId(), FAILED_CONSUMER,
+                () -> recordCharge(request.paymentId(), request.chargeId(), PaymentStatus.FAILED, request.reason(),
+                        paymentEventOutboxService::saveDepositFailed));
+    }
+
+    private Mono<Void> recordCharge(
+            UUID paymentId,
+            UUID chargeId,
+            PaymentStatus status,
+            String reason,
+            Function<Payment, Mono<Void>> saveOutboxEvent) {
         return paymentRepository.findById(paymentId)
                 .filter(payment -> payment.getStatus() == PaymentStatus.WALLET_VALIDATED)
-                .flatMap(payment -> storeCharge(payment, chargeId))
-                .flatMap(paymentEventOutboxService::saveDepositConfirmed);
+                .flatMap(payment -> storeCharge(payment, chargeId, status, reason))
+                .flatMap(saveOutboxEvent);
     }
 
-    private Mono<Payment> storeCharge(Payment payment, UUID chargeId) {
-        payment.setStatus(PaymentStatus.CHARGED);
+    private Mono<Payment> storeCharge(Payment payment, UUID chargeId, PaymentStatus status, String reason) {
+        payment.setStatus(status);
         payment.setExternalReference(chargeId.toString());
+        payment.setReason(reason);
         payment.setUpdatedAt(Instant.now());
 
         return paymentRepository.save(payment);
