@@ -3,7 +3,7 @@ package com.itplamen.digitalwallet.wallet.service;
 import com.itplamen.digitalwallet.wallet.entity.Wallet;
 import com.itplamen.digitalwallet.wallet.event.FundsReservationFailedEvent;
 import com.itplamen.digitalwallet.wallet.event.FundsReservedEvent;
-import com.itplamen.digitalwallet.wallet.event.WithdrawalAccountValidatedEvent;
+import com.itplamen.digitalwallet.wallet.event.PaymentAccountValidatedEvent;
 import com.itplamen.digitalwallet.wallet.repository.InboxMessageRepository;
 import com.itplamen.digitalwallet.wallet.repository.ReservationRepository;
 import com.itplamen.digitalwallet.wallet.repository.WalletRepository;
@@ -34,7 +34,7 @@ public class WithdrawalReservationService {
     private final ReservationRepository reservationRepository;
     private final TransactionalOperator transactionalOperator;
 
-    public Mono<Void> reserveFunds(UUID eventId, WithdrawalAccountValidatedEvent payload) {
+    public Mono<Void> reserveFunds(UUID eventId, PaymentAccountValidatedEvent payload) {
         return Mono.defer(() -> {
                     validate(payload);
                     return inboxMessageRepository.insert(eventId, CONSUMER, Instant.now())
@@ -49,7 +49,7 @@ public class WithdrawalReservationService {
                 .as(transactionalOperator::transactional);
     }
 
-    private Mono<Void> reserve(WithdrawalAccountValidatedEvent payload) {
+    private Mono<Void> reserve(PaymentAccountValidatedEvent payload) {
         if (payload.currency() == null || !CURRENCY_PATTERN.matcher(payload.currency()).matches()) {
             return rejectReservation(payload, "INVALID_CURRENCY");
         }
@@ -70,13 +70,13 @@ public class WithdrawalReservationService {
                 });
     }
 
-    private Mono<Void> holdOrReject(WithdrawalAccountValidatedEvent payload, Wallet wallet, String currency) {
+    private Mono<Void> holdOrReject(PaymentAccountValidatedEvent payload, Wallet wallet, String currency) {
         return wallet.getBalance().compareTo(payload.amount()) >= 0
                 ? holdFunds(payload, wallet, currency)
                 : rejectReservation(payload, "INSUFFICIENT_FUNDS");
     }
 
-    private Mono<Void> rejectReservation(WithdrawalAccountValidatedEvent payload, String reason) {
+    private Mono<Void> rejectReservation(PaymentAccountValidatedEvent payload, String reason) {
         log.warn("Funds reservation for payment {} failed: {}", payload.paymentId(), reason);
         return walletOutboxService.save(
                 payload.paymentId(),
@@ -85,7 +85,7 @@ public class WithdrawalReservationService {
                 Instant.now());
     }
 
-    private Mono<Void> holdFunds(WithdrawalAccountValidatedEvent payload, Wallet wallet, String currency) {
+    private Mono<Void> holdFunds(PaymentAccountValidatedEvent payload, Wallet wallet, String currency) {
         Instant now = Instant.now();
         FundsReservedEvent event = new FundsReservedEvent(
                 payload.paymentId(), wallet.getId(), wallet.getAccountId(), payload.amount(), currency);
@@ -96,7 +96,7 @@ public class WithdrawalReservationService {
                 .then(walletOutboxService.save(payload.paymentId(), "FundsReserved", event, now));
     }
 
-    private void validate(WithdrawalAccountValidatedEvent payload) {
+    private void validate(PaymentAccountValidatedEvent payload) {
         if (payload == null
                 || payload.paymentId() == null
                 || payload.accountId() == null

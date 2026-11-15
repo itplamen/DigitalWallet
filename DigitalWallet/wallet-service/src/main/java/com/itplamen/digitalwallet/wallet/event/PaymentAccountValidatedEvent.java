@@ -6,4 +6,4 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record WithdrawalAccountValidatedEvent(UUID accountId, BigDecimal amount, String currency, UUID paymentId) { }
+public record PaymentAccountValidatedEvent(UUID accountId, BigDecimal amount, String currency, UUID paymentId) { }

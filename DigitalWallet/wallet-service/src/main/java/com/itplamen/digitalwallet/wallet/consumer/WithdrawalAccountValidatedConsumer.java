@@ -1,6 +1,6 @@
 package com.itplamen.digitalwallet.wallet.consumer;
 
-import com.itplamen.digitalwallet.wallet.event.WithdrawalAccountValidatedEvent;
+import com.itplamen.digitalwallet.wallet.event.PaymentAccountValidatedEvent;
 import com.itplamen.digitalwallet.wallet.service.WithdrawalReservationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -40,7 +40,7 @@ public class WithdrawalAccountValidatedConsumer {
             }
 
             return Mono.fromCallable(() -> objectMapper.readValue(
-                            record.value(), WithdrawalAccountValidatedEvent.class))
+                            record.value(), PaymentAccountValidatedEvent.class))
                     .onErrorMap(JacksonException.class,
                             error -> new IllegalArgumentException("Invalid WithdrawalAccountValidated JSON", error))
                     .flatMap(event -> withdrawalReservationService.reserveFunds(eventId, event));
