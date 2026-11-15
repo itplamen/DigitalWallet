@@ -15,9 +15,7 @@ import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.Locale;
 import java.util.UUID;
-import java.util.regex.Pattern;
 
 @Slf4j
 @Service
@@ -25,7 +23,6 @@ import java.util.regex.Pattern;
 public class WithdrawalReservationService {
 
     private static final String CONSUMER = "wallet-withdrawal-account-validated";
-    private static final Pattern CURRENCY_PATTERN = Pattern.compile("[A-Za-z]{3}");
 
     private final WalletRepository walletRepository;
     private final WalletEventStore walletEventStore;
@@ -50,11 +47,11 @@ public class WithdrawalReservationService {
     }
 
     private Mono<Void> reserve(PaymentAccountValidatedEvent payload) {
-        if (payload.currency() == null || !CURRENCY_PATTERN.matcher(payload.currency()).matches()) {
+        if (!CurrencyCodes.isValid(payload.currency())) {
             return rejectReservation(payload, "INVALID_CURRENCY");
         }
 
-        String currency = payload.currency().toUpperCase(Locale.ROOT);
+        String currency = CurrencyCodes.normalize(payload.currency());
         return walletRepository.findByAccountId(payload.accountId())
                 .collectList()
                 .flatMap(wallets -> {

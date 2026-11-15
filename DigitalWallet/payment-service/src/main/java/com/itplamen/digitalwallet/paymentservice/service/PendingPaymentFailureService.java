@@ -2,6 +2,7 @@ package com.itplamen.digitalwallet.paymentservice.service;
 
 import com.itplamen.digitalwallet.paymentservice.entity.Payment;
 import com.itplamen.digitalwallet.paymentservice.entity.PaymentStatus;
+import com.itplamen.digitalwallet.paymentservice.entity.PaymentType;
 import com.itplamen.digitalwallet.paymentservice.repository.PaymentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -21,7 +22,13 @@ public class PendingPaymentFailureService {
         return paymentRepository.findById(paymentId)
                 .filter(payment -> payment.getStatus() == PaymentStatus.PENDING)
                 .flatMap(payment -> markFailed(payment, reason))
-                .flatMap(paymentEventOutboxService::saveWithdrawalFailed);
+                .flatMap(this::saveFailureEvent);
+    }
+
+    private Mono<Void> saveFailureEvent(Payment payment) {
+        return payment.getType() == PaymentType.DEPOSIT
+                ? paymentEventOutboxService.saveDepositFailed(payment)
+                : paymentEventOutboxService.saveWithdrawalFailed(payment);
     }
 
     private Mono<Payment> markFailed(Payment payment, String reason) {

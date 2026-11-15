@@ -36,6 +36,8 @@ public interface WalletRepository extends ReactiveCrudRepository<Wallet, UUID> {
 
     Mono<Wallet> findByAccountIdAndCurrency(UUID accountId, String currency);
 
+    Mono<Boolean> existsByAccountId(UUID accountId);
+
     @Query("SELECT * FROM wallets WHERE id = :walletId FOR UPDATE")
     Mono<Wallet> getById(@Param("walletId") UUID walletId);
 

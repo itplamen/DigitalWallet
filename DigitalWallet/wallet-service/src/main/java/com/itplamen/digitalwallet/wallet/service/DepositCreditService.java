@@ -11,7 +11,6 @@ import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
-import java.util.Locale;
 import java.util.UUID;
 
 @Service
@@ -38,7 +37,7 @@ public class DepositCreditService {
     }
 
     private Mono<Wallet> findWallet(DepositConfirmedEvent payload) {
-        String currency = payload.currency().toUpperCase(Locale.ROOT);
+        String currency = CurrencyCodes.normalize(payload.currency());
         return walletRepository.findByAccountId(payload.accountId())
                 .filter(wallet -> currency.equals(wallet.getCurrency()))
                 .next()
@@ -61,8 +60,7 @@ public class DepositCreditService {
                 || payload.accountId() == null
                 || payload.amount() == null
                 || payload.amount().signum() <= 0
-                || payload.currency() == null
-                || !payload.currency().matches("[A-Za-z]{3}")) {
+                || !CurrencyCodes.isValid(payload.currency())) {
             throw new IllegalArgumentException("DepositConfirmed event has invalid credit fields");
         }
     }
