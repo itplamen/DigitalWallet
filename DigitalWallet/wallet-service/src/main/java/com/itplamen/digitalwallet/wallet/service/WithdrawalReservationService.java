@@ -1,12 +1,14 @@
 package com.itplamen.digitalwallet.wallet.service;
 
 import com.itplamen.digitalwallet.wallet.entity.Wallet;
+import com.itplamen.digitalwallet.wallet.event.FundsReservationFailedEvent;
 import com.itplamen.digitalwallet.wallet.event.FundsReservedEvent;
 import com.itplamen.digitalwallet.wallet.event.WithdrawalAccountValidatedEvent;
 import com.itplamen.digitalwallet.wallet.repository.InboxMessageRepository;
 import com.itplamen.digitalwallet.wallet.repository.ReservationRepository;
 import com.itplamen.digitalwallet.wallet.repository.WalletRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Mono;
@@ -15,12 +17,15 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class WithdrawalReservationService {
 
     private static final String CONSUMER = "wallet-withdrawal-account-validated";
+    private static final Pattern CURRENCY_PATTERN = Pattern.compile("[A-Za-z]{3}");
 
     private final WalletRepository walletRepository;
     private final WalletEventStore walletEventStore;
@@ -45,12 +50,39 @@ public class WithdrawalReservationService {
     }
 
     private Mono<Void> reserve(WithdrawalAccountValidatedEvent payload) {
+        if (payload.currency() == null || !CURRENCY_PATTERN.matcher(payload.currency()).matches()) {
+            return rejectReservation(payload, "INVALID_CURRENCY");
+        }
+
         String currency = payload.currency().toUpperCase(Locale.ROOT);
         return walletRepository.findByAccountId(payload.accountId())
-                .filter(wallet -> currency.equals(wallet.getCurrency()))
-                .filter(wallet -> wallet.getBalance().compareTo(payload.amount()) >= 0)
-                .next()
-                .flatMap(wallet -> holdFunds(payload, wallet, currency));
+                .collectList()
+                .flatMap(wallets -> {
+                    if (wallets.isEmpty()) {
+                        return rejectReservation(payload, "WALLET_NOT_FOUND");
+                    }
+
+                    return wallets.stream()
+                            .filter(wallet -> currency.equals(wallet.getCurrency()))
+                            .findFirst()
+                            .map(wallet -> holdOrReject(payload, wallet, currency))
+                            .orElseGet(() -> rejectReservation(payload, "CURRENCY_MISMATCH"));
+                });
+    }
+
+    private Mono<Void> holdOrReject(WithdrawalAccountValidatedEvent payload, Wallet wallet, String currency) {
+        return wallet.getBalance().compareTo(payload.amount()) >= 0
+                ? holdFunds(payload, wallet, currency)
+                : rejectReservation(payload, "INSUFFICIENT_FUNDS");
+    }
+
+    private Mono<Void> rejectReservation(WithdrawalAccountValidatedEvent payload, String reason) {
+        log.warn("Funds reservation for payment {} failed: {}", payload.paymentId(), reason);
+        return walletOutboxService.save(
+                payload.paymentId(),
+                "FundsReservationFailed",
+                new FundsReservationFailedEvent(payload.paymentId(), reason),
+                Instant.now());
     }
 
     private Mono<Void> holdFunds(WithdrawalAccountValidatedEvent payload, Wallet wallet, String currency) {
@@ -69,9 +101,7 @@ public class WithdrawalReservationService {
                 || payload.paymentId() == null
                 || payload.accountId() == null
                 || payload.amount() == null
-                || payload.amount().signum() <= 0
-                || payload.currency() == null
-                || !payload.currency().matches("[A-Za-z]{3}")) {
+                || payload.amount().signum() <= 0) {
             throw new IllegalArgumentException("WithdrawalAccountValidated event has invalid reservation fields");
         }
 
