@@ -9,7 +9,7 @@ import jakarta.validation.constraints.Positive;
 import java.math.BigDecimal;
 import java.util.UUID;
 
-public record WithdrawalRequest(
+public record PaymentRequest(
         @NotNull(message = "Account ID is required")
         UUID accountId,
 

@@ -27,6 +27,10 @@ public class PaymentEventOutboxService {
         return save(payment, "WithdrawalRequested", payment);
     }
 
+    public Mono<Void> saveDepositRequested(Payment payment) {
+        return save(payment, "DepositRequested", payment);
+    }
+
     public Mono<Void> savePayoutSucceeded(Payment payment) {
         return save(payment, "PayoutSucceeded", new PayoutSucceededEvent(
                 payment.getId(), payment.getAccountId(), payment.getAmount(), payment.getCurrency()));
