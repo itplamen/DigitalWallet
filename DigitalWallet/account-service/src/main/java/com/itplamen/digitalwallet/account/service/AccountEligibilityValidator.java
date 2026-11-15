@@ -27,12 +27,12 @@ public class AccountEligibilityValidator {
                 .map(accounts -> validateTransferAccounts(accounts, sourceAccountId, targetAccountId));
     }
 
-    public Mono<ValidationResult> validateWithdrawalAccount(UUID accountId, BigDecimal amount) {
+    public Mono<ValidationResult> validatePaymentAccount(UUID accountId, BigDecimal amount) {
         if (accountId == null) {
             return Mono.just(ValidationResult.rejected("ACCOUNT_ID_REQUIRED"));
         }
         if (amount == null || amount.signum() <= 0) {
-            return Mono.just(ValidationResult.rejected("WITHDRAWAL_AMOUNT_INVALID"));
+            return Mono.just(ValidationResult.rejected("PAYMENT_AMOUNT_INVALID"));
         }
 
         return accountRepository.findById(accountId)
@@ -42,7 +42,7 @@ public class AccountEligibilityValidator {
                         return ValidationResult.rejected(reason);
                     }
                     if (account.getTransferLimit() == null || amount.compareTo(account.getTransferLimit()) > 0) {
-                        return ValidationResult.rejected("WITHDRAWAL_LIMIT_EXCEEDED");
+                        return ValidationResult.rejected("PAYMENT_LIMIT_EXCEEDED");
                     }
                     return ValidationResult.accepted();
                 })

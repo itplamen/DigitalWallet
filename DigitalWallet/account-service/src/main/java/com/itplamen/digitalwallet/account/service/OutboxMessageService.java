@@ -3,6 +3,7 @@ package com.itplamen.digitalwallet.account.service;
 import com.itplamen.digitalwallet.account.entity.OutboxMessage;
 import com.itplamen.digitalwallet.account.entity.Account;
 import com.itplamen.digitalwallet.account.event.AccountsRejectedEvent;
+import com.itplamen.digitalwallet.account.event.DepositRequestedEvent;
 import com.itplamen.digitalwallet.account.event.PaymentAccountRejectedEvent;
 import com.itplamen.digitalwallet.account.event.TransferRequestedEvent;
 import com.itplamen.digitalwallet.account.event.WithdrawalRequestedEvent;
@@ -37,8 +38,17 @@ public class OutboxMessageService {
         return saveEvent(
                 event.id(),
                 "WithdrawalAccountValidated",
-                new WithdrawalAccountValidatedEvent(
+                new PaymentAccountValidatedEvent(
                         event.accountId(), event.amount(), event.currency(), event.id()));
+    }
+
+    public Mono<Void> saveDepositAccountValidated(DepositRequestedEvent event) {
+        return saveEvent(
+                event.id(),
+                "DepositAccountValidated",
+                new PaymentAccountValidatedEvent(
+                        event.accountId(), event.amount(), event.currency(), event.id()),
+                "Payment");
     }
 
     public Mono<Void> savePaymentAccountRejected(PaymentAccountRejectedEvent event) {
@@ -76,7 +86,7 @@ public class OutboxMessageService {
 
     public record AccountCreatedEvent(UUID accountId, String email, String name) { }
 
-    public record WithdrawalAccountValidatedEvent(
+    public record PaymentAccountValidatedEvent(
             UUID accountId,
             BigDecimal amount,
             String currency,

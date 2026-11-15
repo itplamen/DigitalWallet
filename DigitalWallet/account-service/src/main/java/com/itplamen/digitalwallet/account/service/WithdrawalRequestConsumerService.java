@@ -20,7 +20,7 @@ public class WithdrawalRequestConsumerService {
 
     public Mono<Void> handle(UUID eventId, WithdrawalRequestedEvent event) {
         return inboxMessageProcessor.process(eventId, CONSUMER, () ->
-                accountEligibilityValidator.validateWithdrawalAccount(event.accountId(), event.amount())
+                accountEligibilityValidator.validatePaymentAccount(event.accountId(), event.amount())
                         .flatMap(validation -> validation.valid()
                                 ? outboxMessageService.saveWithdrawalAccountValidated(event)
                                 : outboxMessageService.savePaymentAccountRejected(
