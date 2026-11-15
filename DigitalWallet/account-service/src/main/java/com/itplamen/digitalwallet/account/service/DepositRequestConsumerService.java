@@ -1,6 +1,7 @@
 package com.itplamen.digitalwallet.account.service;
 
 import com.itplamen.digitalwallet.account.event.DepositRequestedEvent;
+import com.itplamen.digitalwallet.account.event.PaymentAccountRejectedEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
@@ -22,6 +23,7 @@ public class DepositRequestConsumerService {
                 accountEligibilityValidator.validatePaymentAccount(event.accountId(), event.amount())
                         .flatMap(validation -> validation.valid()
                                 ? outboxMessageService.saveDepositAccountValidated(event)
-                                : Mono.empty()));
+                                : outboxMessageService.savePaymentAccountRejected(
+                                        new PaymentAccountRejectedEvent(event.id(), validation.reason()))));
     }
 }
