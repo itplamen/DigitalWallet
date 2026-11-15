@@ -1,5 +1,7 @@
 package com.itplamen.digitalwallet.paymentservice.service;
 
+import com.itplamen.digitalwallet.paymentservice.client.BankMockChargeClient;
+import com.itplamen.digitalwallet.paymentservice.entity.Payment;
 import com.itplamen.digitalwallet.paymentservice.entity.PaymentStatus;
 import com.itplamen.digitalwallet.paymentservice.event.DepositWalletValidatedEvent;
 import com.itplamen.digitalwallet.paymentservice.repository.PaymentRepository;
@@ -18,12 +20,14 @@ public class DepositWalletValidatedConsumerService {
 
     private final InboxMessageProcessor inboxMessageProcessor;
     private final PaymentRepository paymentRepository;
+    private final BankMockChargeClient bankMockChargeClient;
 
     public Mono<Void> handle(UUID eventId, DepositWalletValidatedEvent event) {
-        return inboxMessageProcessor.process(eventId, CONSUMER, () -> markWalletValidated(event.paymentId()));
+        return inboxMessageProcessor.process(eventId, CONSUMER, () -> markWalletValidated(event.paymentId()))
+                .flatMap(bankMockChargeClient::requestCharge);
     }
 
-    private Mono<Void> markWalletValidated(UUID paymentId) {
+    private Mono<Payment> markWalletValidated(UUID paymentId) {
         return paymentRepository.findById(paymentId)
                 .filter(payment -> payment.getStatus() == PaymentStatus.PENDING)
                 .flatMap(payment -> {
@@ -31,7 +35,6 @@ public class DepositWalletValidatedConsumerService {
                     payment.setUpdatedAt(Instant.now());
 
                     return paymentRepository.save(payment);
-                })
-                .then();
+                });
     }
 }
